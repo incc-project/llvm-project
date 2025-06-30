@@ -592,6 +592,19 @@ public:
   }
 };
 
+class DebugInfoSection final : public Section {
+public:
+  DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+      : Section(SectionType::DebugInfo, shdr, _data) {
+    // TODO parse debug info structure
+  }
+
+  void dumpData(std::ostream &oss) const override {
+    // TODO dump debug info structure
+    oss << "...\n";
+  }
+};
+
 } // namespace iclang
 
 #endif // ICLANG_SECTION_HPP

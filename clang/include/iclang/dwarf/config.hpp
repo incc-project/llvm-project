@@ -39,6 +39,7 @@ enum class SectionType {
   SymTab,
   SymTabShNdx,
   RelaTab,
+  DebugInfo,
 };
 
 enum class ReusableType {

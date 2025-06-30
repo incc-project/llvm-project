@@ -166,9 +166,14 @@ private:
       logger.Logger::fatal("invalid strtab");
     }
     // 2.2. Parse other sections (depend on 2.1).
-    std::shared_ptr<StrRef> secName;
     for (size_t i = 0; i < sections.size(); i++) {
-      secName = shstrTab->parseOriginalIndex(shdrs[i]->sh_name);
+      std::string secNameStr = shstrTab->parseOriginalIndex(shdrs[i]->sh_name)->getValue();
+
+      if (secNameStr == ".debug_info") {
+        sections[i] = std::make_shared<DebugInfoSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        continue;
+      }
+
       switch (shdrs[i]->sh_type) {
       case llvm::ELF::SHT_STRTAB:
       case llvm::ELF::SHT_SYMTAB:
