@@ -56,12 +56,12 @@ alternatives).")
         string(REGEX MATCH
           "https?://(gh[pousr]|github_pat)_[^/]+@github.com.*"
           github_token "${git_output}")
-        if(github_token)
-          message(SEND_ERROR "The git remote repository URL has an embedded \
-GitHub Token. Remove the token from the URL or use \
-`-DLLVM_FORCE_VC_REPOSITORY=<URL without token>` in order to avoid leaking \
-your token (see https://git-scm.com/docs/gitcredentials for alternatives).")
-        endif()
+#        if(github_token)
+#          message(SEND_ERROR "The git remote repository URL has an embedded \
+#GitHub Token. Remove the token from the URL or use \
+#`-DLLVM_FORCE_VC_REPOSITORY=<URL without token>` in order to avoid leaking \
+#your token (see https://git-scm.com/docs/gitcredentials for alternatives).")
+#        endif()
 
         string(STRIP "${git_output}" git_output)
         set(${repository} ${git_output} PARENT_SCOPE)
