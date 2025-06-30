@@ -66,3 +66,8 @@ docs/_build
 .sw?
 #OS X specific files.
 .DS_store
+
+# IClang begin
+/cmake-build-release
+/cmake-build-debug
+# IClang end
