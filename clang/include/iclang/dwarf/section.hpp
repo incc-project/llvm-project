@@ -593,15 +593,78 @@ public:
 };
 
 class DebugInfoSection final : public Section {
+private:
+  struct CompileUnitHeader {
+    uint64_t offset;
+    uint32_t unitLength;
+    uint16_t version;
+    uint8_t unitType;
+    uint8_t addrSize;
+    uint32_t abbrevOffset;
+  };
+  std::vector<CompileUnitHeader> cuHeaders;
+
 public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugInfo, shdr, _data) {
     // TODO parse debug info structure
+    const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
+    const uint8_t *end = start + sh_size;
+    const uint8_t *p = start;
+
+    while (p + 12 <= end) {
+      uint64_t offset = p - start;
+
+      // Reference: "DWARF5", page 200.
+      uint32_t unitLength = *reinterpret_cast<const uint32_t *>(p); p += 4;
+      uint16_t version = *reinterpret_cast<const uint16_t *>(p); p += 2;
+      uint8_t unitType = *reinterpret_cast<const uint8_t *>(p); p += 1;
+      uint8_t addrSize = *reinterpret_cast<const uint8_t *>(p); p += 1;
+      uint32_t abbrevOffset = *reinterpret_cast<const uint32_t *>(p); p += 4;
+
+      cuHeaders.push_back({
+          offset,
+          unitLength,
+          version,
+          unitType,
+          addrSize,
+          abbrevOffset
+      });
+
+      uint64_t nextUnit = offset + 4 + unitLength;
+      if (start + nextUnit > end)
+        break;
+
+      p = start + nextUnit;
+    }
   }
 
   void dumpData(std::ostream &oss) const override {
     // TODO dump debug info structure
-    oss << "...\n";
+    oss << ".debug_info contents:\n";
+    // dump Compile Unit
+    for (const auto &cu : cuHeaders) {
+      const char *unitTypeStr = "unknown";
+      switch (cu.unitType) {
+      case 0x01: unitTypeStr = "DW_UT_compile"; break;
+      case 0x02: unitTypeStr = "DW_UT_type"; break;
+      case 0x03: unitTypeStr = "DW_UT_partial"; break;
+      case 0x04: unitTypeStr = "DW_UT_skeleton"; break;
+      case 0x05: unitTypeStr = "DW_UT_split_compile"; break;
+      case 0x06: unitTypeStr = "DW_UT_split_type"; break;
+      }
+
+      oss << std::hex << std::setfill('0');
+      oss << "0x" << std::setw(8) << cu.offset << ": Compile Unit: ";
+      oss << "length = 0x" << std::setw(8) << cu.unitLength << ", ";
+      oss << "format = DWARF32, ";
+      oss << "version = 0x" << std::setw(4) << cu.version << ", ";
+      oss << "unit_type = " << unitTypeStr << ", ";
+      oss << "abbr_offset = 0x" << std::setw(4) << cu.abbrevOffset << ", ";
+      oss << "addr_size = 0x" << std::setw(2) << static_cast<int>(cu.addrSize) << " ";
+      // NextUnitOffset = Offset + Length + LengthFieldByteSize
+      oss << "(next unit at 0x" << std::setw(8) << (cu.offset + 4 + cu.unitLength) << ")\n";
+    }
   }
 };
 
