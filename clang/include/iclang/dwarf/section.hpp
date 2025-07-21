@@ -617,6 +617,7 @@ public:
 
   DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
     : Section(SectionType::DebugAbbrev, shdr, _data) {
+    // Ref: 7.5.3
     // TODO parse debug abbrev structure
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = start + sh_size;
@@ -744,6 +745,7 @@ private:
   std::vector<StringEntry> strings; // List of string entries
 
 public:
+  // TODO fix: string overlap, according to debug str offset.
   DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugStr, shdr, _data) {
     // TODO parse debug str structure
@@ -797,6 +799,8 @@ public:
 
 class DebugAddrSection final : public Section {
 private:
+  // TODO: refactor redundant fields -> members.
+  // TODO: block struct -> rela. Note: debug_info -> block ref.
   // Structure representing an address table
   struct AddrTable {
     uint64_t offsetBase;   // Table start offset (relative to section)
@@ -811,8 +815,10 @@ private:
   std::vector<AddrTable> tables; // List of address tables
 
 public:
+
   DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugAddr, shdr, _data) {
+    // Ref: 7.27
     // TODO parse debug addr structure
     const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = ptr + shdr->sh_size;
@@ -822,7 +828,7 @@ public:
       if (end - ptr < 8)
         break; // Invalid header
 
-      uint32_t unitLength = *reinterpret_cast<const uint32_t *>(ptr);
+      const uint32_t unitLength = *reinterpret_cast<const uint32_t *>(ptr);
       ptr += 4;
 
       const uint8_t *tableEnd = ptr + unitLength;
@@ -968,6 +974,8 @@ class DebugStrOffsetsSection final : public Section {
 private:
   const DebugStrSection &debugStr;
 
+  // TODO: refactor redundant fields -> members.
+  // TODO: block struct -> rela. Note: debug_info -> block ref.
   // Structure representing a string offsets table
   struct StringOffsetsTable {
     uint64_t offsetBase;  // Table start offset (relative to section)
@@ -981,8 +989,10 @@ private:
   std::vector<StringOffsetsTable> tables; // List of string offset tables
 
 public:
-  DebugStrOffsetsSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugStrSection &strRef)
+  DebugStrOffsetsSection(const llvm::object::ELF64LE::Shdr *shdr,
+                         const char *_data, const DebugStrSection &strRef)
       : Section(SectionType::DebugStrOffsets, shdr, _data), debugStr(strRef) {
+    // Ref 7.26
     // TODO parse debug str offset structure
     const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = ptr + sh_size;
@@ -1280,6 +1290,7 @@ public:
     }
 };
 
+// TODO refactor -> DebugInfoSection, DebugLineSection -> tools
 FormValueRaw parseFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end,
                            const DebugStrOffsetsSection *strOffsetsSection,
                            const DebugStrSection *strSection,
@@ -1288,6 +1299,8 @@ FormValueRaw parseFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end
                            int strOffsetsTableIndex,
                            uint64_t addrBaseOffset,
                            std::optional<int64_t> implicitConst = std::nullopt);
+
+// Ref 7.5
 class DebugInfoSection final : public Section {
 private:
   // Structure representing a compile unit header
@@ -1318,8 +1331,13 @@ private:
   const DebugAddrSection &debugAddr;
 
 public:
-  DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugAbbrevSection &abbrevRef, const DebugStrSection &strRef, const DebugStrOffsetsSection &strOffsetRef, const DebugAddrSection &addrRef)
-      : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef), debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef){
+  DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                   const DebugAbbrevSection &abbrevRef,
+                   const DebugStrSection &strRef,
+                   const DebugStrOffsetsSection &strOffsetRef,
+                   const DebugAddrSection &addrRef)
+      : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef),
+        debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef) {
     // TODO parse debug info structure
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = start + sh_size;
@@ -1556,9 +1574,6 @@ public:
       out.push_back(0x00); // Null abbrev code for end of children
     }
   }
-
-
-
 };
 
 FormValueRaw parseFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end,
@@ -1779,6 +1794,19 @@ FormValueRaw parseFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end
   result.rawBytes.assign(start, p);
   return  result;
 }
+
+// TODO .debug_rnglists, 7.28, clang, lld version 17.0.6
+// int test() {
+// int x = 1;
+// x += 2;
+// return x;
+// }
+//
+// int main() {
+//   int x = 1;
+//   x += test();
+//   return x;
+// }
 
 } // namespace iclang
 

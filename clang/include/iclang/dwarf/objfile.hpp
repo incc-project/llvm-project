@@ -48,6 +48,14 @@ private:
   std::shared_ptr<SymtabShndxSection> symTabShndx = nullptr;
   std::shared_ptr<SymbolTableSection> symTab = nullptr;
 
+  std::shared_ptr<DebugAbbrevSection> debugAbbrev;
+  std::shared_ptr<DebugStrSection> debugStr;
+  std::shared_ptr<DebugInfoSection> debugInfoSection;
+  std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
+  std::shared_ptr<DebugAddrSection> debugAddr;
+  std::shared_ptr<RelocationSection> relaDebugStrOffsets;
+  std::shared_ptr<RelocationSection> relaDebugAddr;
+
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sections
 
   static bool getIsRela(const uint16_t m) {
@@ -166,14 +174,6 @@ private:
       logger.Logger::fatal("invalid strtab");
     }
     // 2.2. Parse other sections (depend on 2.1).
-    std::shared_ptr<DebugAbbrevSection> debugAbbrev;
-    std::shared_ptr<DebugStrSection> debugStr;
-    std::shared_ptr<DebugInfoSection> debugInfoSection;
-    std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
-    std::shared_ptr<DebugAddrSection> debugAddr;
-    std::shared_ptr<RelocationSection> relaDebugStrOffsets;
-    std::shared_ptr<RelocationSection> relaDebugAddr;
-
     const llvm::object::ELF64LE::Shdr* debugInfoShdr = nullptr;
     const char* debugInfoData = nullptr;
     size_t debugInfoIndex = -1;
@@ -253,7 +253,9 @@ private:
       }
     }
 
-    if (debugStrOffShdr && debugStr){
+    // TODO Handle rela after 3.4.
+    if (debugStrOffShdr) {
+      assert(debugStr != nullptr);
       debugStrOff = std::make_shared<DebugStrOffsetsSection>(debugStrOffShdr, debugStrOffData, *debugStr);
       sections[debugStrOffIndex] = debugStrOff;
 
@@ -271,7 +273,8 @@ private:
       }
     }
 
-    if (debugInfoShdr && debugAbbrev && debugStr && debugAddr) {
+    if (debugInfoShdr) {
+      assert(debugAbbrev != nullptr && debugStr != nullptr && debugAddr != nullptr);
       debugInfoSection = std::make_shared<DebugInfoSection>(
           debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, *debugStrOff, *debugAddr);
       sections[debugInfoIndex] = debugInfoSection;

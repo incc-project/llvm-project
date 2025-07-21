@@ -312,6 +312,7 @@ std::string intToHex(uint64_t val, int width) {
   return oss.str();
 }
 
+// Ref: llvm/include/llvm/Support/LEB128.h
 uint64_t decodeULEB128(const uint8_t *p, unsigned *n = nullptr,
                        const uint8_t *end = nullptr,
                        const char **error = nullptr) {
