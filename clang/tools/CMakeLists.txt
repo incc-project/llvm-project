@@ -55,4 +55,6 @@ add_clang_subdirectory(offload-arch)
 
 # IClang begin
 add_clang_subdirectory(iclang-dwarf)
+add_clang_subdirectory(iclang-funcv)
+add_clang_subdirectory(iclang-bindiff)
 # IClang end

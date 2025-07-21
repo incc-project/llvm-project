@@ -25,7 +25,7 @@ add_clang_tool(iclang-dwarf
         intrinsics_gen
 )
 
-clang_target_link_libraries(clang
+clang_target_link_libraries(iclang-dwarf
         PRIVATE
         clangBasic
         clangCodeGen

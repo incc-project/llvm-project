@@ -1,8 +1,8 @@
-#include "iclang/dwarf/objfile.hpp"
-
-#include "iclang/global.hpp"
+#include "iclang/FuncV/ELF/ObjFile.hpp"
+#include "iclang/Global.hpp"
 
 using namespace iclang;
+using namespace iclang::funcv::elf;
 
 static bool startsWith(const char* str, const char* prefix) {
   const size_t prefixLen = std::strlen(prefix);
