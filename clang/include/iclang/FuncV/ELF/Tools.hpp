@@ -343,23 +343,44 @@ uint64_t decodeULEB128(const uint8_t *p, unsigned *n = nullptr,
   return Value;
 }
 
-int64_t decodeSLEB128(const uint8_t *&p, const uint8_t *end) {
-  int64_t result = 0;
-  unsigned shift = 0;
-  uint8_t byte;
+int64_t decodeSLEB128(const uint8_t *p, unsigned *n = nullptr,
+                      const uint8_t *end = nullptr,
+                      const char **error = nullptr) {
+  const uint8_t *orig_p = p;
+  int64_t Value = 0;
+  unsigned Shift = 0;
+  uint8_t Byte;
   do {
-    if (p >= end) break;
-    byte = *p++;
-    result |= ((int64_t)(byte & 0x7f)) << shift;
-    shift += 7;
-  } while (byte & 0x80);
-  if ((shift < 64) && (byte & 0x40))
-    result |= -((int64_t)1 << shift);
-  return result;
+    if (p == end) {
+      if (error)
+        *error = "malformed sleb128, extends past end";
+      if (n)
+        *n = (unsigned)(p - orig_p);
+      return 0;
+    }
+    Byte = *p;
+    uint64_t Slice = Byte & 0x7f;
+    if (Shift >= 63 &&
+        ((Shift == 63 && Slice != 0 && Slice != 0x7f) ||
+         (Shift > 63 && Slice != (Value < 0 ? 0x7f : 0x00)))) {
+      if (error)
+        *error = "sleb128 too big for int64";
+      if (n)
+        *n = (unsigned)(p - orig_p);
+      return 0;
+    }
+    Value |= Slice << Shift;
+    Shift += 7;
+    ++p;
+  } while (Byte >= 128);
+  // Sign extend negative numbers if needed.
+  if (Shift < 64 && (Byte & 0x40))
+    Value |= UINT64_MAX << Shift;
+  if (n)
+    *n = (unsigned)(p - orig_p);
+  return Value;
 }
 
-
-// === 原始版本（你已经定义了）===
 inline unsigned encodeULEB128(uint64_t Value, uint8_t *p, unsigned PadTo = 0) {
   uint8_t *orig_p = p;
   unsigned Count = 0;
@@ -402,7 +423,6 @@ inline unsigned encodeSLEB128(int64_t Value, uint8_t *p, unsigned PadTo = 0) {
   return static_cast<unsigned>(p - orig_p);
 }
 
-// === 新增封装版本（写入 std::vector）===
 inline void encodeULEB128(uint64_t Value, std::vector<uint8_t> &out, unsigned PadTo = 0) {
   uint8_t buf[16];
   unsigned len = encodeULEB128(Value, buf, PadTo);
@@ -492,7 +512,9 @@ std::string skipFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end,
     return *p++ ? "true" : "false";
   }
   case 0x0d: { // DW_FORM_sdata
-    int64_t val = decodeSLEB128(p, end);
+    unsigned size = 0;
+    int64_t val = decodeSLEB128(p, &size, end);
+    p += size;
     return std::to_string(val);
   }
   case 0x0e: {

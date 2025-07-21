@@ -1017,7 +1017,6 @@ public:
   DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
     : Section(SectionType::DebugAbbrev, shdr, _data) {
     // Ref: 7.5.3
-    // TODO parse debug abbrev structure
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = start + sh_size;
     const uint8_t *p = start;
@@ -1052,7 +1051,8 @@ public:
 
           AttributeForm af = {attr, form};
           if (form == 0x21 /* DW_FORM_implicit_const */) {
-            af.implicitConst = decodeSLEB128(p, end);
+            af.implicitConst = decodeSLEB128(p, &bytesRead, end);
+            p += bytesRead;
           }
 
           decl.attrForms.push_back(af);
@@ -1067,7 +1067,6 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug abbrev structure
     oss << ".debug_abbrev contents:\n";
     for (const auto &[offset, decls] : abbrevTables) {
       oss << "Abbrev table for offset: 0x" << std::setw(8) << std::setfill('0')
@@ -1147,7 +1146,6 @@ public:
   // TODO fix: string overlap, according to debug str offset.
   DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugStr, shdr, _data) {
-    // TODO parse debug str structure
     const char *start = data;
     const char *end = data + sh_size;
     uint64_t offset = 0;
@@ -1181,7 +1179,6 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug str structure
     oss << ".debug_str contents:\n";
     for (const auto &entry : strings) {
       oss << "0x" << intToHex(entry.offset, 8) << ": \"" << entry.str << "\"\n";
@@ -1198,27 +1195,26 @@ public:
 
 class DebugAddrSection final : public Section {
 private:
-  // TODO: refactor redundant fields -> members.
   // TODO: block struct -> rela. Note: debug_info -> block ref.
   // Structure representing an address table
   struct AddrTable {
-    uint64_t offsetBase;   // Table start offset (relative to section)
-    uint64_t size;         // Total table size (including header and addresses)
+    uint32_t unitLength;
     uint16_t version;      // DWARF version
     uint8_t addrSize;      // Address size in bytes
     uint8_t segSize;      // Segment selector size
-    uint64_t headerSize;   // Header size
-    std::vector<uint64_t> addresses; // List of addresses
   };
 
   std::vector<AddrTable> tables; // List of address tables
+  std::vector<uint64_t> offsetBases;                  // 每个表的 offsetBase
+  std::vector<uint64_t> sizes;                        // 每个表的 size（unitLength + 4）
+  std::vector<uint64_t> headerSizes;                  // 每个表头部长度
+  std::vector<std::vector<uint64_t>> allAddresses;    // 每个表的地址列表
 
 public:
 
   DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugAddr, shdr, _data) {
     // Ref: 7.27
-    // TODO parse debug addr structure
     const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = ptr + shdr->sh_size;
 
@@ -1227,33 +1223,34 @@ public:
       if (end - ptr < 8)
         break; // Invalid header
 
-      const uint32_t unitLength = *reinterpret_cast<const uint32_t *>(ptr);
+      const uint32_t unitLength = llvm::support::endian::read32le(ptr);
       ptr += 4;
 
       const uint8_t *tableEnd = ptr + unitLength;
       if (tableEnd > end) break;
-
       if (tableEnd - ptr < 4) break;
 
       AddrTable table;
-      table.offsetBase = tableStart - reinterpret_cast<const uint8_t *>(data);
-      table.size = unitLength + 4;
-
-      table.version = *reinterpret_cast<const uint16_t *>(ptr);
+      table.unitLength = unitLength;
+      table.version = llvm::support::endian::read16le(ptr);
       ptr += 2;
 
       table.addrSize = *ptr++;
       table.segSize = *ptr++;
-      table.headerSize = 4 + 2 + 1 + 1;
+      tables.push_back(table);
 
+      offsetBases.push_back(tableStart - reinterpret_cast<const uint8_t *>(data));
+      sizes.push_back(unitLength + 4);
+      headerSizes.push_back(4 + 2 + 1 + 1);
+
+      std::vector<uint64_t> addresses;
       while (ptr + table.addrSize <= tableEnd) {
         uint64_t addr = 0;
         memcpy(&addr, ptr, table.addrSize);
         ptr += table.addrSize;
-        table.addresses.push_back(addr);
+        addresses.push_back(addr);
       }
-
-      tables.push_back(std::move(table));
+      allAddresses.push_back(std::move(addresses));
     }
   }
 
@@ -1262,33 +1259,32 @@ public:
     for (const auto &rel : relocs) {
       uint64_t r_offset = rel->getROffset();
 
-      for (auto &table : tables) {
-        uint64_t tableStart = table.offsetBase + table.headerSize;
-        uint64_t tableEnd = table.offsetBase + table.size;
+      for (size_t i = 0; i < tables.size(); ++i) {
+        uint64_t tableStart = offsetBases[i] + headerSizes[i];
+        uint64_t tableEnd = offsetBases[i] + sizes[i];
 
         if (r_offset < tableStart || r_offset >= tableEnd)
           continue;
 
         uint64_t offsetInTable = r_offset - tableStart;
-        if (offsetInTable % table.addrSize != 0)
+        if (offsetInTable % tables[i].addrSize != 0)
           continue;
 
-        size_t entryIndex = offsetInTable / table.addrSize;
-        if (entryIndex >= table.addresses.size())
+        size_t entryIndex = offsetInTable / tables[i].addrSize;
+        if (entryIndex >= allAddresses[i].size())
           continue;
 
-        uint64_t relocated = static_cast<uint64_t>(rel->getRAddend());
-        table.addresses[entryIndex] = relocated;
+        allAddresses[i][entryIndex] = static_cast<uint64_t>(rel->getRAddend());
       }
     }
   }
 
   // Get address by table base offset and index
   uint64_t getAddressByIndex(uint64_t baseOffset, uint64_t index) const {
-    for (const auto &table : tables) {
-      if (table.offsetBase == baseOffset) {
-        if (index < table.addresses.size())
-          return table.addresses[index];
+    for (size_t i = 0; i < tables.size(); ++i) {
+      if (offsetBases[i] == baseOffset) {
+        if (index < allAddresses[i].size())
+          return allAddresses[i][index];
       }
     }
     return -1;
@@ -1297,7 +1293,9 @@ public:
   void writeDataTo(char *buffer) override {
     std::vector<uint8_t> out;
 
-    for (const auto &table : tables) {
+    for (size_t i = 0; i < tables.size(); ++i) {
+      const auto &table = tables[i];
+      const auto &addresses = allAddresses[i];
       size_t startOffset = out.size();
 
       // 1. Reserve space for unit_length (4 bytes)
@@ -1310,7 +1308,7 @@ public:
       out.push_back(table.segSize);
 
       // 3. Write address entries
-      for (uint64_t addr : table.addresses) {
+      for (uint64_t addr : addresses) {
         if (table.addrSize == 4) {
           out.push_back(addr & 0xff);
           out.push_back((addr >> 8) & 0xff);
@@ -1338,12 +1336,13 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug addr structure
-    for (const auto &table : tables) {
+    for (size_t i = 0; i < tables.size(); ++i) {
+      const auto &table = tables[i];
+      const auto &addresses = allAddresses[i];
       oss << ".debug_addr contents:\n";
 
       oss << "Address table header: length = 0x"
-          << std::hex << std::setw(8) << std::setfill('0') << table.size - 4
+          << std::hex << std::setw(8) << std::setfill('0') << table.unitLength
           << ", format = DWARF32, version = 0x"
           << std::setw(4) << table.version
           << ", addr_size = 0x"
@@ -1353,7 +1352,7 @@ public:
           << std::dec << "\n";
 
       oss << "Addrs: [\n";
-      for (uint64_t addr : table.addresses) {
+      for (uint64_t addr : addresses) {
         if (table.addrSize == 4) {
           oss << "0x" << std::hex << std::setw(8) << std::setfill('0')
               << static_cast<uint32_t>(addr) << std::dec << "\n";
@@ -1373,26 +1372,26 @@ class DebugStrOffsetsSection final : public Section {
 private:
   const DebugStrSection &debugStr;
 
-  // TODO: refactor redundant fields -> members.
   // TODO: block struct -> rela. Note: debug_info -> block ref.
   // Structure representing a string offsets table
   struct StringOffsetsTable {
-    uint64_t offsetBase;           // Table start offset (relative to section)
-    uint64_t size;                 // Contribution size
-    uint16_t version;              // DWARF version
-    uint64_t headerSize;           // Header size
-    uint64_t entrySize;            // Entry size (bytes)
-    std::vector<uint32_t> offsets; // List of string offsets
+    uint32_t unitLength;
+    uint16_t version;
+    uint16_t padding; // always 0
   };
 
-  std::vector<StringOffsetsTable> tables; // List of string offset tables
+  std::vector<StringOffsetsTable> tables;
+  std::vector<uint64_t> offsetBases;
+  std::vector<uint64_t> sizes;
+  std::vector<uint64_t> headerSizes;
+  std::vector<std::vector<uint32_t>> allOffsets;
+
 
 public:
   DebugStrOffsetsSection(const llvm::object::ELF64LE::Shdr *shdr,
                          const char *_data, const DebugStrSection &strRef)
       : Section(SectionType::DebugStrOffsets, shdr, _data), debugStr(strRef) {
     // Ref 7.26
-    // TODO parse debug str offset structure
     const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = ptr + sh_size;
 
@@ -1401,7 +1400,7 @@ public:
       if (end - ptr < 4)
         break;
 
-      uint32_t unitLength = *reinterpret_cast<const uint32_t *>(ptr);
+      uint32_t unitLength = llvm::support::endian::read32le(ptr);
       ptr += 4;
 
       const uint8_t *tableEnd = ptr + unitLength;
@@ -1410,26 +1409,29 @@ public:
 
       if (tableEnd - ptr < 4)
         break;
-      uint16_t version = *reinterpret_cast<const uint16_t *>(ptr);
+
+      uint16_t version = llvm::support::endian::read16le(ptr);
       ptr += 2;
-      ptr += 2; // padding/reserved
+      uint16_t padding = llvm::support::endian::read16le(ptr);
+      ptr += 2;
 
       StringOffsetsTable table;
-      table.offsetBase = tableStart - reinterpret_cast<const uint8_t *>(data);
-      table.size = unitLength + 4;
+      table.unitLength = unitLength;
       table.version = version;
-      table.headerSize = 8; // unit_length + version + padding = 2 + 2 + 4
-      table.entrySize = 4;  // DWARF v5 string offset entries are 4 bytes
+      table.padding = padding;
+      tables.push_back(table);
 
+      offsetBases.push_back(tableStart - reinterpret_cast<const uint8_t *>(data));
+      sizes.push_back(unitLength + 4);
+      headerSizes.push_back(8); // 4 (length) + 2 (version) + 2 (padding)
+
+      std::vector<uint32_t> offsets;
       while (ptr + 4 <= tableEnd) {
-        //        uint32_t offset = *reinterpret_cast<const uint32_t *>(ptr);
         uint32_t offset = llvm::support::endian::read32le(ptr);
-        table.offsets.push_back(offset);
+        offsets.push_back(offset);
         ptr += 4;
       }
-
-      tables.push_back(std::move(table));
-      ptr = tableEnd;
+      allOffsets.push_back(offsets);
     }
   }
 
@@ -1439,26 +1441,20 @@ public:
     for (const auto &rel : relocs) {
       uint64_t r_offset = rel->getROffset();
 
-      for (auto &table : tables) {
-        // Check if relocation falls within this table
-        uint64_t tableStart = table.offsetBase + table.headerSize;
-        uint64_t tableEnd = table.offsetBase + table.size;
+      for (size_t i = 0; i < tables.size(); ++i) {
+        uint64_t tableStart = offsetBases[i] + headerSizes[i];
+        uint64_t tableEnd = offsetBases[i] + sizes[i];
 
         if (r_offset < tableStart || r_offset >= tableEnd)
           continue;
 
-        // Find which entry it falls on
         uint64_t offsetInTable = r_offset - tableStart;
-        if (offsetInTable % table.entrySize != 0)
-          continue;
+        if (offsetInTable % 4 != 0) continue;
 
-        size_t entryIndex = offsetInTable / table.entrySize;
-        if (entryIndex >= table.offsets.size())
-          continue;
+        size_t entryIndex = offsetInTable / 4;
+        if (entryIndex >= allOffsets[i].size()) continue;
 
-        // Apply relocation: simple way is to replace with addend
-        uint64_t relocated = static_cast<uint64_t>(rel->getRAddend());
-        table.offsets[entryIndex] = static_cast<uint32_t>(relocated);
+        allOffsets[i][entryIndex] = static_cast<uint32_t>(rel->getRAddend());
       }
     }
   }
@@ -1466,9 +1462,10 @@ public:
   void writeDataTo(char *buffer) override {
     std::vector<uint8_t> out;
 
-    for (const auto &table : tables) {
+    for (size_t i = 0; i < tables.size(); ++i) {
+      const auto &table = tables[i];
+      const auto &offsets = allOffsets[i];
       size_t startOffset = out.size();
-
       // 1. Reserve space for unit_length (4 bytes)
       out.resize(out.size() + 4);
 
@@ -1479,7 +1476,7 @@ public:
       out.push_back(0); // padding byte 2
 
       // 3. Write offsets, each is 4 bytes little endian
-      for (uint32_t offset : table.offsets) {
+      for (uint32_t offset : offsets) {
         out.push_back(offset & 0xff);
         out.push_back((offset >> 8) & 0xff);
         out.push_back((offset >> 16) & 0xff);
@@ -1501,18 +1498,19 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug str offset structure
     oss << ".debug_str_offsets contents:\n";
-    for (const auto &table : tables) {
+    for (size_t i = 0; i < tables.size(); ++i) {
+      const auto &table = tables[i];
+      const auto &offsets = allOffsets[i];
+
       oss << "0x" << std::hex << std::setw(8) << std::setfill('0')
-          << table.offsetBase << ": Contribution size = " << std::dec
-          << table.size << ", Format = DWARF32"
+          << offsetBases[i] << ": Contribution size = " << std::dec
+          << sizes[i] << ", Format = DWARF32"
           << ", Version = " << table.version << "\n";
 
-      for (size_t i = 0; i < table.offsets.size(); ++i) {
-        uint64_t absOffset =
-            table.offsetBase + table.headerSize + i * table.entrySize;
-        uint32_t strOffset = table.offsets[i];
+      for (size_t j = 0; j < offsets.size(); ++j) {
+        uint64_t absOffset = offsetBases[i] + headerSizes[i] + j * 4;
+        uint32_t strOffset = offsets[j];
         std::string str = debugStr.getString(strOffset);
 
         oss << "0x" << std::hex << std::setw(8) << std::setfill('0')
@@ -1524,8 +1522,8 @@ public:
 
   // Get table index by base offset
   int getTableIndex(uint64_t baseOffset) const {
-    for (size_t i = 0; i < tables.size(); ++i) {
-      if (tables[i].offsetBase == baseOffset)
+    for (size_t i = 0; i < offsetBases.size(); ++i) {
+      if (offsetBases[i] == baseOffset)
         return static_cast<int>(i);
     }
     return -1;
@@ -1536,11 +1534,10 @@ public:
     if (tableIndex < 0 || static_cast<size_t>(tableIndex) >= tables.size())
       return 0;
 
-    const auto &table = tables[tableIndex];
-    if (strxIndex >= table.offsets.size())
+    if (strxIndex >= allOffsets[tableIndex].size())
       return 0;
 
-    return table.offsets[strxIndex];
+    return allOffsets[tableIndex][strxIndex];
   }
 
   // Get string by table index and string index
@@ -1576,7 +1573,6 @@ private:
 public:
   DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugLine, shdr, _data) {
-    // TODO parse debug line offset structure
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *p = start;
 
@@ -1658,7 +1654,6 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug line offset structure
     oss << ".debug_line contents:\n";
     oss << "debug_line[0x" << std::setw(8) << std::setfill('0') << std::hex
         << prologueOffset << "]\n";
@@ -1697,14 +1692,6 @@ public:
   }
 };
 
-// TODO refactor -> DebugInfoSection, DebugLineSection -> tools
-FormValueRaw
-parseFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end,
-               const DebugStrOffsetsSection *strOffsetsSection,
-               const DebugStrSection *strSection,
-               const DebugAddrSection *addrSection, uint64_t dieOffset,
-               int strOffsetsTableIndex, uint64_t addrBaseOffset,
-               std::optional<int64_t> implicitConst = std::nullopt);
 
 // Ref 7.5
 class DebugInfoSection final : public Section {
@@ -1745,7 +1732,6 @@ public:
                    const DebugAddrSection &addrRef)
       : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef),
         debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef) {
-    // TODO parse debug info structure
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = start + sh_size;
     const uint8_t *p = start;
@@ -1754,21 +1740,20 @@ public:
       uint64_t offset = p - start;
 
       // Reference: "DWARF5", page 200.
-      uint32_t unitLength = *reinterpret_cast<const uint32_t *>(p);
+//      uint32_t unitLength = *reinterpret_cast<const uint32_t *>(p);
+      uint32_t unitLength = llvm::support::endian::read32le(p);
       p += 4;
-      uint16_t version = *reinterpret_cast<const uint16_t *>(p);
+      uint16_t version = llvm::support::endian::read16le(p);
       p += 2;
-      uint8_t unitType = *reinterpret_cast<const uint8_t *>(p);
-      p += 1;
-      uint8_t addrSize = *reinterpret_cast<const uint8_t *>(p);
-      p += 1;
-      uint32_t abbrevOffset = *reinterpret_cast<const uint32_t *>(p);
+      uint8_t unitType = *p++;
+      uint8_t addrSize = *p++;
+      uint32_t abbrevOffset = llvm::support::endian::read32le(p);
       p += 4;
 
       std::optional<uint64_t> dwoId;
       if (unitType == 0x04 || unitType == 0x05) {
         if (p + 8 <= end) {
-          dwoId = *reinterpret_cast<const uint64_t *>(p);
+          dwoId = llvm::support::endian::read64le(p);
           p += 8;
         }
       }
@@ -1869,7 +1854,6 @@ public:
   }
 
   void dumpData(std::ostream &oss) const override {
-    // TODO dump debug info structure
     oss << ".debug_info contents:\n";
     // dump Compile Unit
     for (size_t i = 0; i < cuHeaders.size(); ++i) {
@@ -1989,231 +1973,235 @@ public:
       out.push_back(0x00); // Null abbrev code for end of children
     }
   }
-};
 
-FormValueRaw parseFormValue(
-    uint64_t form, const uint8_t *&p, const uint8_t *end,
-    //                           const DebugInfoSection::CompileUnitHeader &cu,
-    const DebugStrOffsetsSection *strOffsets = nullptr,
-    const DebugStrSection *strSection = nullptr,
-    const DebugAddrSection *addrSection = nullptr, uint64_t dieOffset = 0,
-    int strOffsetsTableIndex = -1, uint64_t addrBaseOffset = 0,
-    std::optional<int64_t> implicitConst) {
-  FormValueRaw result;
-  result.form = form;
-  const uint8_t *start = p;
+  FormValueRaw parseFormValue(
+      uint64_t form, const uint8_t *&p, const uint8_t *end,
+      //                           const DebugInfoSection::CompileUnitHeader &cu,
+      const DebugStrOffsetsSection *strOffsets = nullptr,
+      const DebugStrSection *strSection = nullptr,
+      const DebugAddrSection *addrSection = nullptr, uint64_t dieOffset = 0,
+      int strOffsetsTableIndex = -1, uint64_t addrBaseOffset = 0,
+      std::optional<int64_t> implicitConst = std::nullopt) {
+    FormValueRaw result;
+    result.form = form;
+    const uint8_t *start = p;
 
-  switch (form) {
-  case 0x01: { // DW_FORM_addr
-    if (end - p < 8) {
-      llvm::errs() << "Error: DW_FORM_addr: not enough bytes left in buffer\n";
-      p = end;
+    switch (form) {
+    case 0x01: { // DW_FORM_addr
+      if (end - p < 8) {
+        llvm::errs() << "Error: DW_FORM_addr: not enough bytes left in buffer\n";
+        p = end;
+        break;
+      }
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
       break;
     }
-    result.value = *reinterpret_cast<const uint64_t *>(p);
-    p += 8;
-    break;
-  }
-  case 0x03: { // DW_FORM_block2
-    uint16_t len = *reinterpret_cast<const uint16_t *>(p);
-    p += 2;
-    result.blockData.insert(result.blockData.end(), p, p + len);
-    p += len;
-    break;
-  }
-  case 0x04: { // DW_FORM_block4
-    uint32_t len = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    result.blockData.insert(result.blockData.end(), p, p + len);
-    p += len;
-    break;
-  }
-  case 0x05: { // DW_FORM_data2
-    result.value = *reinterpret_cast<const uint16_t *>(p);
-    p += 2;
-    break;
-  }
-  case 0x06: { // DW_FORM_data4
-    result.value = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    break;
-  }
-  case 0x07: { // DW_FORM_data8
-    result.value = *reinterpret_cast<const uint64_t *>(p);
-    p += 8;
-    break;
-  }
-  case 0x08: { // DW_FORM_string
-    result.str = std::string(reinterpret_cast<const char *>(p));
-    p += result.str.size() + 1;
-    break;
-  }
-  case 0x09: { // DW_FORM_block
-    unsigned size = 0;
-    uint64_t len = decodeULEB128(p, &size, end);
-    p += size;
-    std::ostringstream oss;
-    result.blockData.insert(result.blockData.end(), p, p + len);
-    p += len;
-    break;
-  }
-  case 0x0a: { // DW_FORM_block1
-    uint8_t len = *p++;
-    result.blockData.insert(result.blockData.end(), p, p + len);
-    p += len;
-    break;
-  }
-  case 0x0b: { // DW_FORM_data1
-    result.value = *p++;
-    break;
-  }
-  case 0x0c: { // DW_FORM_flag
-    result.flag = (*p++) != 0;
-    break;
-  }
-  case 0x0d: { // DW_FORM_sdata
-    result.value = decodeSLEB128(p, end);
-    break;
-  }
-  case 0x0e: { // DW_FORM_strp
-    result.value = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    if (strSection) {
-      result.str = strSection->getString(result.value);
-    } else {
-      result.str = "";
+    case 0x03: { // DW_FORM_block2
+      uint16_t len = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
     }
-    break;
-  }
-  case 0x0f: { // DW_FORM_udata
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    break;
-  }
-  case 0x10: // DW_FORM_ref_addr
-  case 0x1c: // DW_FORM_ref_sup4
-  case 0x24: // DW_FORM_ref_sup8
-  case 0x20:
-  case 0x14: { // DW_FORM_ref_sig8
-    result.value = *reinterpret_cast<const uint64_t *>(p);
-    p += 8;
-    break;
-  }
-  case 0x11: {
-    result.value = *p++;
-    break;
-  }
-  case 0x12: {
-    result.value = *reinterpret_cast<const uint16_t *>(p);
-    p += 2;
-    break;
-  }
-  case 0x13: {
-    result.value = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    break;
-  }
-  case 0x15: { // DW_FORM_ref_udata
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    break;
-  }
-  case 0x16: { // DW_FORM_indirect
-    unsigned len = 0;
-    uint64_t actualForm = decodeULEB128(p, &len, end);
-    p += len;
-    return parseFormValue(actualForm, p, end, strOffsets, strSection,
-                          addrSection, dieOffset);
-  }
-  case 0x17: { // DW_FORM_sec_offset
-    result.value = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    break;
-  }
-  case 0x18: { // DW_FORM_exprloc
-    unsigned len = 0;
-    uint64_t size = decodeULEB128(p, &len, end);
-    p += len;
-    result.blockData.insert(result.blockData.end(), p, p + size);
-    p += size;
-    break;
-  }
-  case 0x19: {
-    result.flag = true;
-    break;
-  }
-  case 0x1b: {
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    break;
-  }
-  case 0x1d:
-  case 0x1f: { // DW_FORM_strp_sup
-    result.value = *reinterpret_cast<const uint32_t *>(p);
-    p += 4;
-    break;
-  }
-  case 0x1e: { // DW_FORM_data16
-    result.blockData.insert(result.blockData.end(), p, p + 16);
-    p += 16;
-    break;
-  }
-  case 0x21: { // DW_FORM_implicit_const
-    if (implicitConst.has_value())
-      result.value = implicitConst.value();
-    else
-      llvm::errs() << "DW_FORM_implicit_const missing value at DIE offset 0x"
-                   << intToHex(dieOffset, 8) << "\n";
-    break;
-    break;
-  }
-  case 0x22:
-  case 0x23: { // DW_FORM_rnglistx
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    break;
-  }
-  case 0x25: { // DW_FORM_strx1
-    result.value = *p++;
-    if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
-      result.str =
-          strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+    case 0x04: { // DW_FORM_block4
+      uint32_t len = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
     }
-    break;
-  }
+    case 0x05: { // DW_FORM_data2
+      result.value = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      break;
+    }
+    case 0x06: { // DW_FORM_data4
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x07: { // DW_FORM_data8
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
+      break;
+    }
+    case 0x08: { // DW_FORM_string
+      result.str = std::string(reinterpret_cast<const char *>(p));
+      p += result.str.size() + 1;
+      break;
+    }
+    case 0x09: { // DW_FORM_block
+      unsigned size = 0;
+      uint64_t len = decodeULEB128(p, &size, end);
+      p += size;
+      std::ostringstream oss;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x0a: { // DW_FORM_block1
+      uint8_t len = *p++;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x0b: { // DW_FORM_data1
+      result.value = *p++;
+      break;
+    }
+    case 0x0c: { // DW_FORM_flag
+      result.flag = (*p++) != 0;
+      break;
+    }
+    case 0x0d: { // DW_FORM_sdata
+      unsigned size = 0;
+      result.value = decodeSLEB128(p, &size, end);
+      p += size;
+      break;
+    }
+    case 0x0e: { // DW_FORM_strp
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      if (strSection) {
+        result.str = strSection->getString(result.value);
+      } else {
+        result.str = "";
+      }
+      break;
+    }
+    case 0x0f: { // DW_FORM_udata
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x10: // DW_FORM_ref_addr
+    case 0x1c: // DW_FORM_ref_sup4
+    case 0x24: // DW_FORM_ref_sup8
+    case 0x20:
+    case 0x14: { // DW_FORM_ref_sig8
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
+      break;
+    }
+    case 0x11: {
+      result.value = *p++;
+      break;
+    }
+    case 0x12: {
+      result.value = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      break;
+    }
+    case 0x13: {
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x15: { // DW_FORM_ref_udata
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x16: { // DW_FORM_indirect
+      unsigned len = 0;
+      uint64_t actualForm = decodeULEB128(p, &len, end);
+      p += len;
+      return parseFormValue(actualForm, p, end, strOffsets, strSection,
+                            addrSection, dieOffset);
+    }
+    case 0x17: { // DW_FORM_sec_offset
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x18: { // DW_FORM_exprloc
+      unsigned len = 0;
+      uint64_t size = decodeULEB128(p, &len, end);
+      p += len;
+      result.blockData.insert(result.blockData.end(), p, p + size);
+      p += size;
+      break;
+    }
+    case 0x19: {
+      result.flag = true;
+      break;
+    }
+    case 0x1b: {
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x1d:
+    case 0x1f: { // DW_FORM_strp_sup
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x1e: { // DW_FORM_data16
+      result.blockData.insert(result.blockData.end(), p, p + 16);
+      p += 16;
+      break;
+    }
+    case 0x21: { // DW_FORM_implicit_const
+      if (implicitConst.has_value())
+        result.value = implicitConst.value();
+      else
+        llvm::errs() << "DW_FORM_implicit_const missing value at DIE offset 0x"
+                     << intToHex(dieOffset, 8) << "\n";
+      break;
+      break;
+    }
+    case 0x22:
+    case 0x23: { // DW_FORM_rnglistx
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x25: { // DW_FORM_strx1
+      result.value = *p++;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
+    }
 
-  case 0x1a:   // DW_FORM_strx
-  case 0x26:   // DW_FORM_strx2
-  case 0x27:   // DW_FORM_strx3
-  case 0x28: { // DW_FORM_strx4
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
-      result.str =
-          strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+    case 0x1a:   // DW_FORM_strx
+    case 0x26:   // DW_FORM_strx2
+    case 0x27:   // DW_FORM_strx3
+    case 0x28: { // DW_FORM_strx4
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
     }
-    break;
+    case 0x29:
+    case 0x2a:
+    case 0x2b:
+    case 0x2c: { // DW_FORM_addrx[1-4]
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    default:
+      llvm::errs() << "Unsupported form 0x" + intToHex(form, 2);
+    }
+    result.rawBytes.assign(start, p);
+    return result;
   }
-  case 0x29:
-  case 0x2a:
-  case 0x2b:
-  case 0x2c: { // DW_FORM_addrx[1-4]
-    unsigned len = 0;
-    result.value = decodeULEB128(p, &len, end);
-    p += len;
-    break;
-  }
-  default:
-    llvm::errs() << "Unsupported form 0x" + intToHex(form, 2);
-  }
-  result.rawBytes.assign(start, p);
-  return result;
-}
+};
+
+
 
 // TODO .debug_rnglists, 7.28, clang, lld version 17.0.6
 // int test() {
