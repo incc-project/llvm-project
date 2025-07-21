@@ -166,11 +166,77 @@ private:
       logger.Logger::fatal("invalid strtab");
     }
     // 2.2. Parse other sections (depend on 2.1).
+    std::shared_ptr<DebugAbbrevSection> debugAbbrev;
+    std::shared_ptr<DebugStrSection> debugStr;
+    std::shared_ptr<DebugInfoSection> debugInfoSection;
+    std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
+    std::shared_ptr<DebugAddrSection> debugAddr;
+    std::shared_ptr<RelocationSection> relaDebugStrOffsets;
+    std::shared_ptr<RelocationSection> relaDebugAddr;
+
+    const llvm::object::ELF64LE::Shdr* debugInfoShdr = nullptr;
+    const char* debugInfoData = nullptr;
+    size_t debugInfoIndex = -1;
+
+    const llvm::object::ELF64LE::Shdr* debugStrOffShdr = nullptr;
+    const char* debugStrOffData = nullptr;
+    size_t debugStrOffIndex = -1;
+
+    const llvm::object::ELF64LE::Shdr* debugAddrShdr = nullptr;
+    const char* debugAddrData = nullptr;
+    size_t debugAddrIndex = -1;
+
     for (size_t i = 0; i < sections.size(); i++) {
       std::string secNameStr = shstrTab->parseOriginalIndex(shdrs[i]->sh_name)->getValue();
 
+      if (secNameStr == ".debug_abbrev") {
+        debugAbbrev = std::make_shared<DebugAbbrevSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        sections[i] = debugAbbrev; // 保存进 sections 映射
+        continue;
+      }
+
       if (secNameStr == ".debug_info") {
-        sections[i] = std::make_shared<DebugInfoSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        // 延迟构造 .debug_info，暂时记录必要信息
+        debugInfoShdr = shdrs[i];
+        debugInfoData = object + shdrs[i]->sh_offset;
+        debugInfoIndex = i;
+        continue;
+      }
+
+      if (secNameStr == ".debug_str_offsets") {
+        debugStrOffShdr = shdrs[i];
+        debugStrOffData = object + shdrs[i]->sh_offset;
+        debugStrOffIndex = i;
+        continue;
+      }
+
+      if (secNameStr == ".debug_str") {
+        debugStr = std::make_shared<DebugStrSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        sections[i] = debugStr;
+        continue;
+      }
+
+      if (secNameStr == ".rela.debug_str_offsets") {
+        relaDebugStrOffsets = std::static_pointer_cast<RelocationSection>(
+            sections[i] = std::make_shared<RelocationSection>(shdrs[i], object + shdrs[i]->sh_offset));
+        continue;
+      }
+
+      if (secNameStr == ".debug_addr") {
+        debugAddrShdr = shdrs[i];
+        debugAddrData = object + shdrs[i]->sh_offset;
+        debugAddrIndex = i;
+        continue;
+      }
+
+      if (secNameStr == ".rela.debug_addr") {
+        relaDebugAddr = std::static_pointer_cast<RelocationSection>(
+            sections[i] = std::make_shared<RelocationSection>(shdrs[i], object + shdrs[i]->sh_offset));
+        continue;
+      }
+
+      if (secNameStr == ".debug_line") {
+        sections[i] = std::make_shared<DebugLineSection>(shdrs[i], object + shdrs[i]->sh_offset);
         continue;
       }
 
@@ -185,6 +251,30 @@ private:
         sections[i] = std::make_shared<OrdinarySection>(shdrs[i], object + shdrs[i]->sh_offset);
         break;
       }
+    }
+
+    if (debugStrOffShdr && debugStr){
+      debugStrOff = std::make_shared<DebugStrOffsetsSection>(debugStrOffShdr, debugStrOffData, *debugStr);
+      sections[debugStrOffIndex] = debugStrOff;
+
+      if (relaDebugStrOffsets){
+        debugStrOff->applyRelocations(relaDebugStrOffsets->getRelocations());
+      }
+    }
+
+    if (debugAddrShdr){
+      debugAddr = std::make_shared<DebugAddrSection>(debugAddrShdr, debugAddrData);
+      sections[debugAddrIndex] = debugAddr;
+
+      if (relaDebugAddr){
+        debugAddr->applyRelocations(relaDebugAddr->getRelocations());
+      }
+    }
+
+    if (debugInfoShdr && debugAbbrev && debugStr && debugAddr) {
+      debugInfoSection = std::make_shared<DebugInfoSection>(
+          debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, *debugStrOff, *debugAddr);
+      sections[debugInfoIndex] = debugInfoSection;
     }
 
     // 3. Parse references. (depend on 2)

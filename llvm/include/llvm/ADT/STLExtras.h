@@ -1253,7 +1253,7 @@ namespace detail {
 ///   * ReferenceT dereference_iterator(const BaseT &base, ptrdiff_t index)
 ///     - Dereference an iterator pointing to the base object at the given
 ///       index.
-///   * BaseT offset_base(const BaseT &base, ptrdiff_t index)
+///   * BaseT offsetBase(const BaseT &base, ptrdiff_t index)
 ///     - Return a new base that is offset from the provide base by 'index'
 ///       elements.
 template <typename DerivedT, typename BaseT, typename T,
