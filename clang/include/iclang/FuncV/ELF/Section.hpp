@@ -1568,13 +1568,12 @@ private:
   RnglistHeader header{};
   std::vector<uint32_t> offsets;
   std::map<uint32_t, std::vector<RnglistEntry>> rangeLists;
-  const DebugAddrSection &debugAddr;
-
+//  const DebugAddrSection &debugAddr;
+  const DebugAddrSection *debugAddr;
   mutable std::unordered_map<uint32_t, uint64_t> contextMap;
 public:
-  DebugRnglistSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugAddrSection &addrRef)
+  DebugRnglistSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugAddrSection *addrRef)
       : Section(SectionType::DebugRnglists, shdr, _data), debugAddr(addrRef) {
-    // TODO : parse debug rnglists
     const uint8_t *p = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = p + sh_size;
 
@@ -1693,24 +1692,27 @@ public:
         }
         switch (entry.kind) {
         case 0x01: {
+          assert(debugAddr != nullptr);
           uint64_t baseAddr =
-              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(baseOffset, entry.value0);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << baseAddr << ")\n";
           break;
         }
         case 0x02: {
+          assert(debugAddr != nullptr);
           uint64_t startAddr =
-              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(baseOffset, entry.value0);
           uint64_t endAddr =
-              debugAddr.getAddressByIndex(baseOffset, entry.value1);
+              debugAddr->getAddressByIndex(baseOffset, entry.value1);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << startAddr << ", 0x" << std::setw(16) << endAddr << ")\n";
           break;
         }
         case 0x03: {
+          assert(debugAddr != nullptr);
           uint64_t startAddr =
-              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(baseOffset, entry.value0);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << startAddr << ", 0x" << std::setw(16) << entry.value1 << ")\n";
           break;
@@ -2626,16 +2628,16 @@ private:
   std::vector<std::vector<DIE>> cuDIEs; // Array of top-level DIEs for each CU
   const DebugAbbrevSection &abbrev;
   const DebugStrSection &debugStr;
-  const DebugStrOffsetsSection &debugStrOffset;
-  const DebugAddrSection &debugAddr;
+  const DebugStrOffsetsSection *debugStrOffset;
+  const DebugAddrSection *debugAddr;
   const DebugRnglistSection &debugRnglist;
 
 public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
                    const DebugAbbrevSection &abbrevRef,
                    const DebugStrSection &strRef,
-                   const DebugStrOffsetsSection &strOffsetRef,
-                   const DebugAddrSection &addrRef,
+                   const DebugStrOffsetsSection *strOffsetRef,
+                   const DebugAddrSection *addrRef,
                    const DebugRnglistSection &rnglistRef)
       : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef),
         debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef), debugRnglist(rnglistRef) {
@@ -2688,7 +2690,8 @@ public:
                 parseFormValue(af.form, tmp, cuEnd, nullptr, nullptr, nullptr,
                                dieOffset, strOffsetsTableIndex, addrBaseOffset)
                     .value;
-            strOffsetsTableIndex = debugStrOffset.getTableIndex(val);
+            assert(debugStrOffset != nullptr);
+            strOffsetsTableIndex = debugStrOffset->getTableIndex(val);
           } else if (af.attr == 0x73) {
             addrBaseOffset =
                 parseFormValue(af.form, tmp, cuEnd, nullptr, nullptr, nullptr,
@@ -2737,12 +2740,12 @@ public:
     for (const auto &af : decl->attrForms) {
       FormValueRaw valueRaw;
       if (af.form == 0x21)
-        valueRaw = parseFormValue(af.form, p, end, &debugStrOffset, &debugStr,
-                                  &debugAddr, die.offset, strOffsetsTableIndex,
+        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, &debugStr,
+                                  debugAddr, die.offset, strOffsetsTableIndex,addrBaseOffset,
                                   af.implicitConst.value());
       else
-        valueRaw = parseFormValue(af.form, p, end, &debugStrOffset, &debugStr,
-                                  &debugAddr, die.offset, strOffsetsTableIndex,
+        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, &debugStr,
+                                  debugAddr, die.offset, strOffsetsTableIndex,
                                   addrBaseOffset);
       die.attributes.emplace_back(af.attr, valueRaw);
 
@@ -3059,12 +3062,12 @@ public:
       break;
     }
     case 0x21: { // DW_FORM_implicit_const
+      assert(implicitConst.has_value());
       if (implicitConst.has_value())
         result.value = implicitConst.value();
       else
         llvm::errs() << "DW_FORM_implicit_const missing value at DIE offset 0x"
                      << intToHex(dieOffset, 8) << "\n";
-      break;
       break;
     }
     case 0x22:

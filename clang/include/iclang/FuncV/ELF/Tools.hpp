@@ -742,6 +742,11 @@ void writeFormValue(const FormValueRaw &val, std::vector<uint8_t> &out)  {
     llvm::errs() << "DW_FORM_indirect should not reach writeFormValue\n";
     break;
   }
+  case 0x0e: {
+    for (int i = 0; i < 4; ++i)
+      out.push_back((val.value >> (i * 8)) & 0xFF);
+    break;
+  }
   default:
     llvm::errs() << "Unsupported form in writeFormValue: 0x" << intToHex(val.form, 2) << "\n";
   }
