@@ -21,6 +21,7 @@
 #include "iclang/FuncV/ELF/Tools.hpp"
 
 #include "llvm/Support/Endian.h"
+#include <llvm/Support/LEB128.h>
 
 namespace iclang {
 namespace funcv {
@@ -1547,148 +1548,1052 @@ public:
   }
 };
 
+class DebugRnglistSection final : public Section {
+private:
+  // Ref : 7.28
+  struct RnglistEntry {
+    uint8_t kind;
+    uint64_t value0;
+    uint64_t value1;
+  };
+
+  struct RnglistHeader {
+    uint32_t unit_length;
+    uint16_t version;
+    uint8_t addr_size;
+    uint8_t seg_size;
+    uint32_t offset_entry_count;
+  };
+
+  RnglistHeader header{};
+  std::vector<uint32_t> offsets;
+  std::map<uint32_t, std::vector<RnglistEntry>> rangeLists;
+  const DebugAddrSection &debugAddr;
+
+  mutable std::unordered_map<uint32_t, uint64_t> contextMap;
+public:
+  DebugRnglistSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugAddrSection &addrRef)
+      : Section(SectionType::DebugRnglists, shdr, _data), debugAddr(addrRef) {
+    // TODO : parse debug rnglists
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(data);
+    const uint8_t *end = p + sh_size;
+
+    header.unit_length = llvm::support::endian::read32le(p);
+    p += 4;
+
+    header.version = llvm::support::endian::read16le(p);
+    p += 2;
+    header.addr_size = *p++;
+    header.seg_size = *p++;
+    header.offset_entry_count = llvm::support::endian::read32le(p);
+    p += 4;
+
+    for (uint32_t i = 0; i < header.offset_entry_count; ++i) {
+      uint32_t offset = llvm::support::endian::read32le(p);
+      offsets.push_back(offset);
+      p += 4;
+    }
+
+    uint32_t current_index = 0;
+
+    while (p < end) {
+      uint8_t kind = *p++;
+      if (kind == 0x00) {
+        rangeLists[current_index].push_back({kind, 0, 0});
+        current_index++;
+        continue;
+      }
+
+      RnglistEntry entry{kind, 0, 0};
+
+      unsigned n;
+      switch (kind) {
+      case 0x01: // DW_RLE_base_addressx
+        entry.value0 = decodeULEB128(p, &n);
+        p += n;
+        break;
+
+      case 0x02: // DW_RLE_startx_endx
+        entry.value0 = decodeULEB128(p, &n);
+        p += n;
+        entry.value1 = decodeULEB128(p, &n);
+        p += n;
+        break;
+
+      case 0x03: // DW_RLE_startx_length
+        entry.value0 = decodeULEB128(p, &n);
+        p += n;
+        entry.value1 = decodeULEB128(p, &n);
+        p += n;
+        break;
+
+      case 0x04: // DW_RLE_offset_pair
+        entry.value0 = decodeULEB128(p, &n);
+        p += n;
+        entry.value1 = decodeULEB128(p, &n);
+        p += n;
+        break;
+
+      case 0x05: // DW_RLE_base_address
+        // addr_size bytes
+        entry.value0 = llvm::support::endian::read64le(p); // assume addr_size = 8
+        p += header.addr_size;
+        break;
+
+      case 0x06: // DW_RLE_start_end
+        entry.value0 = llvm::support::endian::read64le(p); // assume addr_size = 8
+        p += header.addr_size;
+        entry.value1 = llvm::support::endian::read64le(p);
+        p += header.addr_size;
+        break;
+
+      case 0x07: // DW_RLE_start_length
+        entry.value0 = llvm::support::endian::read64le(p); // address
+        p += header.addr_size;
+        entry.value1 = decodeULEB128(p, &n);               // length
+        p += n;
+        break;
+
+      default:
+        std::cerr << "Unknown rnglist kind: 0x" << std::hex << (int)kind << "\n";
+        return;
+        }
+        rangeLists[current_index].push_back(entry);
+    }
+  }
+
+  void dumpData(std::ostream &oss) const override {
+    oss << ".debug_rnglists contents:\n";
+    oss << "range list header: "
+        << "length = 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length
+        << ", format = DWARF32"
+        << ", version = 0x" << std::setw(4) << header.version
+        << ", addr_size = 0x" << std::setw(2) << static_cast<int>(header.addr_size)
+        << ", seg_size = 0x" << std::setw(2) << static_cast<int>(header.seg_size)
+        << ", offset_entry_count = 0x" << std::setw(8) << header.offset_entry_count << "\n";
+
+    oss << "offsets: [\n";
+    for (auto offset : offsets) {
+      oss << "0x" << std::hex << std::setw(8) << std::setfill('0') << offset << "\n";
+    }
+    oss << "]\n";
+
+    oss << "ranges:\n";
+    for (auto &rangeList : rangeLists) {
+      uint64_t baseOffset = 0;
+
+      auto it = contextMap.find(rangeList.first);
+      if (it != contextMap.end()) {
+        baseOffset = it->second;
+      }
+      for (const auto &entry : rangeList.second) {
+        if (entry.kind == 0x00) {
+          oss << "<End of list>\n";
+          break;
+        }
+        switch (entry.kind) {
+        case 0x01: {
+          uint64_t baseAddr =
+              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+              << baseAddr << ")\n";
+          break;
+        }
+        case 0x02: {
+          uint64_t startAddr =
+              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+          uint64_t endAddr =
+              debugAddr.getAddressByIndex(baseOffset, entry.value1);
+          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+              << startAddr << ", 0x" << std::setw(16) << endAddr << ")\n";
+          break;
+        }
+        case 0x03: {
+          uint64_t startAddr =
+              debugAddr.getAddressByIndex(baseOffset, entry.value0);
+          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+              << startAddr << ", 0x" << std::setw(16) << entry.value1 << ")\n";
+          break;
+        }
+        case 0x04:
+        case 0x06:
+        case 0x07: {
+          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+              << entry.value0 << ", 0x" << std::setw(16) << entry.value1
+              << ")\n";
+          break;
+        }
+        case 0x05: {
+          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+              << entry.value0 << ")\n";
+          break;
+        }
+        }
+        //        if (entry.kind == 0x01) { // DW_RLE_base_addressx
+//            uint64_t baseAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
+//            oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << baseAddr
+//                << ")\n";
+//        }
+//        else if (entry.kind == 0x02) { // DW_RLE_startx_endx
+//          uint64_t startAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
+//          uint64_t endAddr   = debugAddr.getAddressByIndex(baseOffset, entry.value1);
+//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << startAddr
+//              << ", 0x" << std::setw(16) << endAddr << ")\n";
+//        }
+//        else if (entry.kind == 0x03) { // DW_RLE_startx_length
+//          uint64_t startAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
+//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << startAddr
+//              << ", 0x" << std::setw(16) << entry.value1 << ")\n";
+//        }
+//
+//        else {
+//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << entry.value0
+//              << ", 0x" << std::setw(16) << entry.value1 << ")\n";
+//        }
+      }
+    }
+  }
+
+  void registerAddrBase(uint32_t index, uint64_t addrBaseOffset) const {
+    contextMap[index] = addrBaseOffset;
+  }
+
+  void writeDataTo(char *buffer) override {
+    std::vector<uint8_t> out;
+
+    // unit_length 占位（DWARF32）
+    size_t unit_len_pos = out.size();
+    out.resize(out.size() + 4, 0);
+
+    // header: version, addr_size, seg_size, offset_entry_count
+    uint8_t b2[2];
+    llvm::support::endian::write16le(b2, header.version);
+    out.insert(out.end(), b2, b2 + 2);
+
+    out.push_back(static_cast<uint8_t>(header.addr_size));
+    out.push_back(static_cast<uint8_t>(header.seg_size));
+
+    uint8_t b4[4];
+    llvm::support::endian::write32le(b4, header.offset_entry_count);
+    out.insert(out.end(), b4, b4 + 4);
+
+    // offsets 表
+    for (uint32_t off : offsets) {
+      llvm::support::endian::write32le(b4, off);
+      out.insert(out.end(), b4, b4 + 4);
+    }
+
+    // entries（按解析结果逐条写回）
+    for (auto &rangeList : rangeLists) {
+      for (const auto &e : rangeList.second) {
+        out.push_back(static_cast<uint8_t>(e.kind));
+
+        if (e.kind == 0x00)  // DW_RLE_end_of_list
+          break;
+
+        switch (e.kind) {
+        case 0x01:  // DW_RLE_base_addressx: index (ULEB)
+          encodeULEB128(e.value0, out);
+          break;
+
+        case 0x02:  // DW_RLE_startx_endx: start_index(ULEB), end_index(ULEB)
+          encodeULEB128(e.value0, out);
+          encodeULEB128(e.value1, out);
+          break;
+
+        case 0x03:  // DW_RLE_startx_length: start_index(ULEB), length(ULEB)
+          encodeULEB128(e.value0, out);
+          encodeULEB128(e.value1, out);
+          break;
+
+        case 0x04:  // DW_RLE_offset_pair: start_off(ULEB), end_off(ULEB)
+          encodeULEB128(e.value0, out);
+          encodeULEB128(e.value1, out);
+          break;
+
+        case 0x05: { // DW_RLE_base_address: base_addr (addr_size bytes)
+          uint64_t v = e.value0;
+          for (uint8_t i = 0; i < header.addr_size; ++i)
+            out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
+          break;
+        }
+
+        case 0x06: { // DW_RLE_start_end: start_addr(addr_size), end_addr(addr_size)
+          uint64_t a0 = e.value0, a1 = e.value1;
+          for (uint8_t i = 0; i < header.addr_size; ++i)
+            out.push_back(static_cast<uint8_t>((a0 >> (i * 8)) & 0xFF));
+          for (uint8_t i = 0; i < header.addr_size; ++i)
+            out.push_back(static_cast<uint8_t>((a1 >> (i * 8)) & 0xFF));
+          break;
+        }
+
+        case 0x07: { // DW_RLE_start_length: start_addr(addr_size), length(ULEB)
+          uint64_t a = e.value0;
+          for (uint8_t i = 0; i < header.addr_size; ++i)
+            out.push_back(static_cast<uint8_t>((a >> (i * 8)) & 0xFF));
+          encodeULEB128(e.value1, out);
+          break;
+        }
+
+        default:
+          std::cerr << "Unknown rnglist kind when writing: 0x"
+                    << std::hex << static_cast<int>(e.kind) << "\n";
+          return;
+        }
+      }
+    }
+
+
+    // 回填 unit_length（不含自身 4 字节）
+    llvm::support::endian::write32le(out.data() + unit_len_pos,
+                                     static_cast<uint32_t>(out.size() - 4));
+
+    assert(out.size() <= sh_size &&
+           "Rewritten .debug_str_offset larger than original");
+    memcpy(buffer, out.data(), out.size());
+  }
+
+};
+
 class DebugLineSection final : public Section {
 private:
-  uint32_t total_length = 0;
-  uint16_t version = 0;
-  uint8_t address_size = 0;
-  uint8_t segment_selector_size = 0;
-  uint32_t prologue_length = 0;
-  uint8_t min_inst_length = 0;
-  uint8_t max_ops_per_inst = 0;
-  uint8_t default_is_stmt = 0;
-  int8_t line_base = 0;
-  uint8_t line_range = 0;
-  uint8_t opcode_base = 0;
-  std::vector<uint8_t> standard_opcode_lengths;
-  std::vector<std::string> include_directories;
-  struct FileEntry {
-    std::string name;
-    uint64_t dir_index = 0;
-    std::string md5;
+  // Ref : 6.2.4
+  struct LineTableHeader {
+    uint32_t unit_length;
+    uint16_t version;
+    uint8_t address_size;
+    uint8_t segment_selector_size;
+    uint32_t header_length;
+    uint8_t min_inst_length;
+    uint8_t max_ops_per_inst;
+    uint8_t default_is_stmt;
+    int8_t line_base;
+    uint8_t line_range;
+    uint8_t opcode_base;
+    std::vector<uint8_t> standard_opcode_lengths;
+    uint8_t dir_format_count;
+    std::vector<std::pair<uint64_t, uint64_t>> dir_attrs;
+    uint64_t directory_count;
+    std::vector<FormValueRaw> directories;
+    uint8_t file_name_entry_format_count;
+    std::vector<std::pair<uint64_t, uint64_t>> file_attrs;
+    uint64_t file_names_count;
+    struct FileEntry {
+      std::string name;
+      uint64_t dir_index;
+      std::array<uint8_t, 16> md5; // For DWARFv5
+      FormValueRaw val;
+    };
+    std::vector<FileEntry> file_names;
   };
-  std::vector<FileEntry> file_names;
-  uint64_t prologueOffset = 0;
+
+  struct Row {
+    uint64_t address = 0;
+    uint32_t line = 1;
+    uint32_t column = 0;
+    uint32_t file = 1;
+    uint32_t isa = 0;
+    uint32_t discriminator = 0;
+    uint32_t op_index = 0;
+    bool is_stmt;
+    bool basic_block = false;
+    bool end_sequence = false;
+    bool prologue_end = false;
+    bool epilogue_begin = false;
+  };
+
+  LineTableHeader header;
+  std::vector<Row> rows;
 
 public:
   DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
       : Section(SectionType::DebugLine, shdr, _data) {
-    const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
-    const uint8_t *p = start;
+    const uint8_t *p = reinterpret_cast<const uint8_t *>(data);
 
-    prologueOffset = 0;
-    total_length = llvm::support::endian::read32le(p);
+    // header
+    header.unit_length = llvm::support::endian::read32le(p);
     p += 4;
-    version = llvm::support::endian::read16le(p);
+    const uint8_t *end = p + header.unit_length;
+
+    header.version = llvm::support::endian::read16le(p);
     p += 2;
-
-    if (version != 5)
-      return;
-
-    address_size = *p++;
-    segment_selector_size = *p++;
-    prologue_length = llvm::support::endian::read32le(p);
+    header.address_size = *p++;
+    header.segment_selector_size = *p++;
+    header.header_length = llvm::support::endian::read32le(p);
     p += 4;
 
-    const uint8_t *prologue_end = p + prologue_length;
+    header.min_inst_length = *p++;
+    header.max_ops_per_inst = *p++;
+    header.default_is_stmt = *p++;
+    header.line_base = *p++;
+    header.line_range = *p++;
+    header.opcode_base = *p++;
 
-    min_inst_length = *p++;
-    max_ops_per_inst = *p++;
-    default_is_stmt = *p++;
-    line_base = static_cast<int8_t>(*p++);
-    line_range = *p++;
-    opcode_base = *p++;
+    header.standard_opcode_lengths.resize(header.opcode_base - 1);
+    for (uint8_t &len : header.standard_opcode_lengths)
+      len = *p++;
 
-    for (uint8_t i = 1; i < opcode_base; ++i) {
-      standard_opcode_lengths.push_back(*p++);
+    // --- DWARFv5 include_directories_table ---
+    unsigned n;
+    header.dir_format_count = decodeULEB128(p, &n);
+    p += n;
+    for (uint64_t i = 0; i < header.dir_format_count; ++i) {
+      uint64_t content_type = decodeULEB128(p, &n);
+      p += n;
+      uint64_t form = decodeULEB128(p, &n);
+      p += n;
+      header.dir_attrs.push_back(std::make_pair(content_type, form));
     }
 
-    uint8_t dir_format_count = *p++;
-    std::vector<std::pair<uint16_t, uint16_t>> dir_formats;
-    for (int i = 0; i < dir_format_count; ++i) {
-      uint16_t content_type = llvm::support::endian::read16le(p);
-      p += 2;
-      uint16_t form = llvm::support::endian::read16le(p);
-      p += 2;
-      dir_formats.emplace_back(content_type, form);
-    }
-
-    uint8_t directory_count = *p++;
-    for (int i = 0; i < directory_count; ++i) {
-      for (auto &[content_type, form] : dir_formats) {
-        skipFormValue(form, p, prologue_end);
+    header.directory_count = decodeULEB128(p, &n);
+    p += n;
+    for (uint64_t i = 0; i < header.directory_count; ++i) {
+      FormValueRaw value;
+      for (const auto &[type, form] : header.dir_attrs) {
+        if (type == 1) { // DW_LNCT_path
+          value = parseFormValue(form, p, end);
+        }
+        else skipFormValue(form, p, end);
       }
+      header.directories.push_back(value);
     }
 
-    uint8_t file_format_count = *p++;
-    std::vector<std::pair<uint16_t, uint16_t>> file_formats;
-    for (int i = 0; i < file_format_count; ++i) {
-      uint16_t content_type = llvm::support::endian::read16le(p);
-      p += 2;
-      uint16_t form = llvm::support::endian::read16le(p);
-      p += 2;
-      file_formats.emplace_back(content_type, form);
+    header.file_name_entry_format_count = decodeULEB128(p, &n);
+    p += n;
+    for (uint64_t i = 0; i < header.file_name_entry_format_count; ++i) {
+      uint64_t content_type = decodeULEB128(p, &n);
+      p += n;
+      uint64_t form = decodeULEB128(p, &n);
+      p += n;
+      header.file_attrs.emplace_back(content_type, form);
     }
 
-    uint8_t file_count = *p++;
-    for (int i = 0; i < file_count; ++i) {
-      FileEntry entry;
-      for (auto &[content_type, form] : file_formats) {
-        if (form == 0x08 && content_type == 0x1) {
-          entry.name = reinterpret_cast<const char *>(p);
-          p += entry.name.size() + 1;
-        } else if (form == 0x0f && content_type == 0x2) {
-          unsigned bytesRead;
-          entry.dir_index = decodeULEB128(p, &bytesRead);
-          p += bytesRead;
-        } else if (form == 0x1e && content_type == 0x5) {
-          std::ostringstream ss;
-          for (int i = 0; i < 16; ++i)
-            ss << std::hex << std::setfill('0') << std::setw(2) << (int)p[i];
-          entry.md5 = ss.str();
-          p += 16;
+    header.file_names_count = decodeULEB128(p, &n);
+    p += n;
+    for (uint64_t i = 0; i < header.file_names_count; ++i) {
+      LineTableHeader::FileEntry entry;
+      for (const auto &[type, form] : header.file_attrs) {
+        if (type == 1) { // DW_LNCT_path
+          entry.val = parseFormValue(form, p, end);
+          entry.name = entry.val.str;
+        } else if (type == 2) { // DW_LNCT_directory_index
+          entry.dir_index = parseFormValue(form, p, end).value;
+        } else if (type == 5) { // DW_LNCT_md5
+          for (int j = 0; j < 16; ++j)
+            entry.md5[j] = *p++;
+        } else skipFormValue(form, p, end);
+      }
+      header.file_names.push_back(entry);
+    }
+
+    // line table program
+    Row state;
+    state.is_stmt = header.default_is_stmt;
+
+    while (p < end) {
+      uint8_t opcode = *p++;
+      if (opcode >= header.opcode_base) {
+        uint8_t adj_opcode = opcode - header.opcode_base;
+        uint64_t addr_inc = (adj_opcode / header.line_range) * header.min_inst_length;
+        int64_t line_inc = header.line_base + (adj_opcode % header.line_range);
+        state.address += addr_inc;
+        state.line += line_inc;
+        rows.push_back(state);
+        state.basic_block = false;
+        state.epilogue_begin = false;
+        state.prologue_end = false;
+        continue;
+      }
+      if (opcode == 0) {
+        unsigned n;
+        uint64_t len = decodeULEB128(p, &n); p += n;
+        const uint8_t *ext_end = p + len;
+        uint8_t sub = *p++;
+        switch (sub) {
+        case 1: // DW_LNE_end_sequence
+          state.end_sequence = true;
+          rows.push_back(state);
+          state = {};
+          state.line = 1;
+          state.is_stmt = header.default_is_stmt;
+          break;
+        case 2: // DW_LNE_set_address
+          if (header.address_size == 8)
+            state.address = llvm::support::endian::read64le(p);
+          else state.address = llvm::support::endian::read32le(p);
+          p += header.address_size;
+          break;
+        case 3: // DW_LNE_set_prologue_end
+          state.prologue_end = true;
+          break;
+        default: break;
+        }
+        p = ext_end;
+      } else {
+        unsigned n;
+        switch (opcode) {
+        case 1:
+          rows.push_back(state);
+          state.basic_block = false;
+          state.prologue_end = false;
+          state.epilogue_begin = false;
+          break; // DW_LNS_copy
+        case 2: state.address += decodeULEB128(p, &n) * header.min_inst_length; p += n; break;
+        case 3: state.line += decodeSLEB128(p, &n); p += n; break;
+        case 4: state.file = decodeULEB128(p, &n); p += n; break;
+        case 5: state.column = decodeULEB128(p, &n); p += n; break;
+        case 6: state.is_stmt = !state.is_stmt; break;
+        case 7: state.basic_block = true; break;
+        case 8: { // DW_LNS_const_add_pc
+          uint8_t adjusted = 255 - header.opcode_base;
+          uint64_t addr_inc = (adjusted / header.line_range) * header.min_inst_length;
+          state.address += addr_inc;
+          break;
+        }
+        case 9: { // DW_LNS_fixed_advance_pc
+          uint16_t advance = llvm::support::endian::read16le(p); p += 2;
+          state.address += advance;
+          break;
+        }
+        case 10: // DW_LNS_set_prologue_end
+          state.prologue_end = true;
+          break;
+        case 11: // DW_LNS_set_epilogue_begin
+          state.epilogue_begin = true; // optional: your Row struct可加epilogueBegin字段
+          break;
+        case 12: // DW_LNS_set_isa
+          state.isa = decodeULEB128(p, &n); p += n;
+          break;
+        default:
+          // Handle unknown opcode: skip operands
+          if (opcode < header.standard_opcode_lengths.size() + 1) {
+            for (uint8_t i = 0; i < header.standard_opcode_lengths[opcode - 1]; ++i)
+              decodeULEB128(p, &n), p += n;
+          }
+          break;
         }
       }
-      file_names.push_back(entry);
     }
   }
 
   void dumpData(std::ostream &oss) const override {
     oss << ".debug_line contents:\n";
-    oss << "debug_line[0x" << std::setw(8) << std::setfill('0') << std::hex
-        << prologueOffset << "]\n";
-
+    oss << "debug_line[0x00000000]\n";
     oss << "Line table prologue:\n";
-    oss << "    total_length: 0x" << std::setw(8) << std::setfill('0')
-        << std::hex << total_length << "\n";
+    oss << "    total_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length << "\n";
     oss << "          format: DWARF32\n";
-    oss << "         version: " << std::dec << version << "\n";
-    oss << "    address_size: " << (int)address_size << "\n";
-    oss << " seg_select_size: " << (int)segment_selector_size << "\n";
-    oss << " prologue_length: 0x" << std::hex << prologue_length << "\n";
-    oss << " min_inst_length: " << std::dec << (int)min_inst_length << "\n";
-    oss << "max_ops_per_inst: " << (int)max_ops_per_inst << "\n";
-    oss << " default_is_stmt: " << (int)default_is_stmt << "\n";
-    oss << "       line_base: " << (int)line_base << "\n";
-    oss << "      line_range: " << (int)line_range << "\n";
-    oss << "     opcode_base: " << (int)opcode_base << "\n";
+    oss << "         version: " << std::dec << header.version << "\n";
+    oss << "    address_size: " << static_cast<int>(header.address_size) << "\n";
+    oss << " seg_select_size: " << static_cast<int>(header.segment_selector_size) << "\n";
+    oss << " prologue_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.header_length << "\n";
+    oss << " min_inst_length: " << std::dec << static_cast<int>(header.min_inst_length) << "\n";
+    oss << "max_ops_per_inst: " << static_cast<int>(header.max_ops_per_inst) << "\n";
+    oss << " default_is_stmt: " << static_cast<int>(header.default_is_stmt) << "\n";
+    oss << "       line_base: " << static_cast<int>(header.line_base) << "\n";
+    oss << "      line_range: " << static_cast<int>(header.line_range) << "\n";
+    oss << "     opcode_base: " << static_cast<int>(header.opcode_base) << "\n";
 
-    for (size_t i = 0; i < standard_opcode_lengths.size(); ++i) {
-      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i + 1)
-          << "] = " << (int)standard_opcode_lengths[i] << "\n";
-    }
-    for (size_t i = 0; i < include_directories.size(); ++i) {
-      oss << "include_directories[" << std::setw(3) << i << "] = \""
-          << include_directories[i] << "\"\n";
-    }
+    for (size_t i = 0; i < header.standard_opcode_lengths.size(); ++i)
+      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i+1) << "] = "
+          << static_cast<int>(header.standard_opcode_lengths[i]) << "\n";
 
-    for (size_t i = 0; i < file_names.size(); ++i) {
+    for (size_t i = 0; i < header.directories.size(); ++i)
+      oss << "include_directories[" << std::setw(3) << i << "] = \"" << std::hex
+          << header.directories[i].value << "\"\n";
+
+    for (size_t i = 0; i < header.file_names.size(); ++i) {
+      const auto &f = header.file_names[i];
       oss << "file_names[" << std::setw(3) << i << "]:\n";
-      oss << "           name: \"" << file_names[i].name << "\"\n";
-      oss << "      dir_index: " << file_names[i].dir_index << "\n";
-      if (!file_names[i].md5.empty())
-        oss << "   md5_checksum: " << file_names[i].md5 << "\n";
+      oss << "           name: \"" << f.name << "\"\n";
+      oss << "      dir_index: " << f.dir_index << "\n";
+      oss << "   md5_checksum: ";
+      for (uint8_t b : f.md5)
+        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+      oss << std::dec << "\n";
     }
+
+    oss << "\nAddress             Line    Column  File    ISA  Discriminator  OpIndex  Flags\n";
+    oss << "------------------  ------  ------  ------  ---  -------------  -------  -------------\n";
+    for (const auto &row : rows) {
+      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << row.address << "  ";
+      oss << std::dec << std::setw(6) << row.line << "  ";
+      oss << std::setw(6) << row.column << "  ";
+      oss << std::setw(6) << row.file << "  ";
+      oss << std::setw(3) << row.isa << "  ";
+      oss << std::setw(13) << row.discriminator << "  ";
+      oss << std::setw(7) << row.op_index << "  ";
+      std::string flags;
+      if (row.is_stmt) flags += "is_stmt ";
+      if (row.basic_block) flags += "basic_block ";
+      if (row.prologue_end) flags += "prologue_end ";
+      if (row.end_sequence) flags += "end_sequence ";
+      if (row.epilogue_begin) flags += "epilogue_begin ";
+      oss << flags << "\n";
+    }
+  }
+
+  void writeDataTo(char *buffer) override {
+    std::vector<uint8_t> out;
+
+    // --- 1. total_length 预留 ---
+    size_t totalLengthOffset = out.size();
+    out.resize(out.size() + 4); // DWARF32: total_length 占位
+
+    // --- 2. Header (version, address size, etc) ---
+    out.push_back(header.version & 0xff);
+    out.push_back((header.version >> 8) & 0xff);
+    out.push_back(header.address_size);
+    out.push_back(header.segment_selector_size);
+
+    size_t prologueLengthOffset = out.size();
+    out.resize(out.size() + 4); // prologue_length 占位
+    size_t prologueStart = out.size();
+
+    out.push_back(header.min_inst_length);
+    out.push_back(header.max_ops_per_inst);
+    out.push_back(header.default_is_stmt);
+    out.push_back(static_cast<uint8_t>(header.line_base));
+    out.push_back(header.line_range);
+    out.push_back(header.opcode_base);
+
+    out.insert(out.end(), header.standard_opcode_lengths.begin(), header.standard_opcode_lengths.end());
+
+    // attr_count
+    encodeULEB128(header.dir_attrs.size(), out);
+    // attr spec
+    for (const auto &[content_type, form] : header.dir_attrs) {
+      encodeULEB128(content_type, out);
+      encodeULEB128(form, out);
+    }
+    // directory count
+    encodeULEB128(header.directories.size(), out);
+
+    // entries
+    for (const auto &dir : header.directories) {
+      for (const auto &[type, form] : header.dir_attrs) {
+        if (type == 1 /* DW_LNCT_path */) {
+          // DW_FORM_string
+          writeFormValue(dir, out);
+        }
+      }
+    }
+
+    encodeULEB128(header.file_attrs.size(), out);
+
+    // attr spec
+    for (const auto &[content_type, form] : header.file_attrs) {
+      encodeULEB128(content_type, out);
+      encodeULEB128(form, out);
+    }
+
+    // file count
+    encodeULEB128(header.file_names.size(), out);
+
+    // entries
+    for (const auto &f : header.file_names) {
+      for (const auto &[type, form] : header.file_attrs) {
+        if (type == 1 /* DW_LNCT_path */) {
+          // DW_FORM_string
+          writeFormValue(f.val, out);
+        } else if (type == 2 /* DW_LNCT_directory_index */) {
+          encodeULEB128(f.dir_index, out);
+        } else if (type == 5 /* DW_LNCT_md5 */) {
+          if (f.md5.size() != 16)
+            llvm::errs() << "MD5 should be 16 bytes" << "\n";
+          out.insert(out.end(), f.md5.begin(), f.md5.end());
+        } else {
+          llvm::errs() << "Unsupported file_attr type in write" << "\n";
+        }
+      }
+    }
+
+    // --- 5. 回填 prologue_length ---
+    uint32_t prologueLength = static_cast<uint32_t>(out.size() - prologueStart);
+    out[prologueLengthOffset + 0] = (prologueLength & 0xff);
+    out[prologueLengthOffset + 1] = (prologueLength >> 8) & 0xff;
+    out[prologueLengthOffset + 2] = (prologueLength >> 16) & 0xff;
+    out[prologueLengthOffset + 3] = (prologueLength >> 24) & 0xff;
+
+    // TODO : line number program
+    // --- 6. line number program 写入 ---
+    Row prev;
+    prev.is_stmt = header.default_is_stmt;
+    prev.end_sequence = true;
+    uint64_t maxSpecialAddrDelta = (255 - header.opcode_base) / header.line_range;
+    for (auto row : rows) {
+      int64_t addrDelta = row.address - prev.address;
+      if (row.end_sequence) {
+        if (addrDelta >= 0 && static_cast<uint64_t>(addrDelta) == maxSpecialAddrDelta)
+          out.push_back(8);
+        else {
+          out.push_back(2); // DW_LNS_advance_pc
+          encodeULEB128(addrDelta / header.min_inst_length, out);
+          prev.address = row.address;
+        }
+        out.push_back(0);
+        encodeULEB128(1, out);
+        out.push_back(1);
+        prev = {};
+        prev.line = 1;
+        prev.is_stmt = header.default_is_stmt;
+        prev.end_sequence = true;
+        continue;
+      }
+      int64_t lineDelta = row.line - prev.line;
+
+      if (row.file != prev.file) {
+        out.push_back(4);
+        encodeULEB128(row.file, out);
+        prev.file = row.file;
+      }
+
+      if (row.column != prev.column) {
+        out.push_back(5); // DW_LNS_set_column
+        encodeULEB128(row.column, out);
+        prev.column = row.column;
+      }
+
+      if (row.discriminator != prev.discriminator) {
+        out.push_back(0); // extended opcode
+        unsigned size = llvm::getULEB128Size(row.discriminator);
+        encodeULEB128(size + 1, out);
+        out.push_back(4);
+        encodeULEB128(row.discriminator, out);
+        prev.discriminator = row.discriminator;
+      }
+
+      if (row.isa != prev.isa) {
+        out.push_back(12); // DW_LNS_set_isa
+        encodeULEB128(row.isa, out);
+        prev.isa = row.isa;
+      }
+
+      if (row.is_stmt != prev.is_stmt) {
+        out.push_back(6); // DW_LNS_negate_stmt
+        prev.is_stmt = row.is_stmt;
+      }
+
+      if (row.basic_block && !prev.basic_block) {
+        out.push_back(7); // DW_LNS_set_basic_block
+        prev.basic_block = true;
+      }
+
+      if (row.prologue_end && !prev.prologue_end) {
+        out.push_back(10); // DW_LNS_set_prologue_end
+        prev.prologue_end = true;
+      }
+
+      if (row.epilogue_begin && !prev.epilogue_begin) {
+        out.push_back(11); // DW_LNS_set_epilogue_begin
+        prev.epilogue_begin = true;
+      }
+
+      if (prev.end_sequence && !row.end_sequence) {
+        prev.end_sequence = false;
+        out.push_back(0); // extended opcode
+        encodeULEB128(1 + header.address_size, out);
+        out.push_back(2); // DW_LNE_SET_ADDRESS
+        for (int i = 0; i < header.address_size; ++i)
+          out.push_back((row.address >> (i * 8)) & 0xff);
+        prev.address = row.address;
+      }
+
+      uint64_t Temp, Opcode;
+      bool needCopy = false;
+
+      Temp = lineDelta - header.line_base;
+
+      if (Temp >= header.line_range || Temp + header.opcode_base > 255) {
+        out.push_back(3);
+        encodeULEB128(lineDelta, out);
+        lineDelta = 0;
+        Temp = 0 - header.line_base;
+        needCopy = true;
+      }
+
+      if (lineDelta == 0 && addrDelta == 0) {
+        out.push_back(1);
+        continue;
+      }
+
+      Temp += header.opcode_base;
+
+      if (addrDelta >= 0 && static_cast<uint64_t>(addrDelta) < 256 + maxSpecialAddrDelta) {
+        Opcode = Temp + addrDelta * header.line_range;
+        if (Opcode <= 255) {
+          out.push_back(Opcode);
+          prev.discriminator = 0;
+          prev.address = row.address;
+          prev.line = row.line;
+          prev.basic_block = false;
+          prev.prologue_end = false;
+          prev.epilogue_begin = false;
+          continue;
+        }
+
+        // Try using DW_LNS_const_add_pc followed by special op.
+        Opcode = Temp + (addrDelta - maxSpecialAddrDelta) * header.line_range;
+        if (Opcode <= 255) {
+          out.push_back(8);
+          out.push_back(Opcode);
+          prev.discriminator = 0;
+          prev.address = row.address;
+          prev.line = row.line;
+          prev.basic_block = false;
+          prev.prologue_end = false;
+          prev.epilogue_begin = false;
+          continue;
+        }
+      }
+
+      out.push_back(2); // DW_LNS_advance_pc
+      encodeULEB128(addrDelta / header.min_inst_length, out);
+
+      if (needCopy)
+        out.push_back(1);
+      else {
+        assert(Temp <= 255 && "Buggy special opcode encoding.");
+        out.push_back(Temp);
+      }
+      prev.discriminator = 0;
+      prev.address = row.address;
+      prev.line = row.line;
+    }
+
+    uint32_t unitLength = static_cast<uint32_t>(out.size() - 4);
+    for (int i = 0; i < 4; ++i)
+      out[totalLengthOffset + i] = (unitLength >> (i * 8)) & 0xff;
+
+    assert(out.size() <= sh_size &&
+           "Rewritten .debug_line larger than original");
+    memcpy(buffer, out.data(), out.size());
+  }
+
+  FormValueRaw parseFormValue(
+      uint64_t form, const uint8_t *&p, const uint8_t *end,
+      //                           const DebugInfoSection::CompileUnitHeader &cu,
+      const DebugStrOffsetsSection *strOffsets = nullptr,
+      const DebugStrSection *strSection = nullptr,
+      const DebugAddrSection *addrSection = nullptr, uint64_t dieOffset = 0,
+      int strOffsetsTableIndex = -1, uint64_t addrBaseOffset = 0,
+      std::optional<int64_t> implicitConst = std::nullopt) {
+    FormValueRaw result;
+    result.form = form;
+    const uint8_t *start = p;
+
+    switch (form) {
+    case 0x01: { // DW_FORM_addr
+      if (end - p < 8) {
+        llvm::errs() << "Error: DW_FORM_addr: not enough bytes left in buffer\n";
+        p = end;
+        break;
+      }
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
+      break;
+    }
+    case 0x03: { // DW_FORM_block2
+      uint16_t len = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x04: { // DW_FORM_block4
+      uint32_t len = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x05: { // DW_FORM_data2
+      result.value = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      break;
+    }
+    case 0x06: { // DW_FORM_data4
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x07: { // DW_FORM_data8
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
+      break;
+    }
+    case 0x08: { // DW_FORM_string
+      result.str = std::string(reinterpret_cast<const char *>(p));
+      p += result.str.size() + 1;
+      break;
+    }
+    case 0x09: { // DW_FORM_block
+      unsigned size = 0;
+      uint64_t len = decodeULEB128(p, &size, end);
+      p += size;
+      std::ostringstream oss;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x0a: { // DW_FORM_block1
+      uint8_t len = *p++;
+      result.blockData.insert(result.blockData.end(), p, p + len);
+      p += len;
+      break;
+    }
+    case 0x0b: { // DW_FORM_data1
+      result.value = *p++;
+      break;
+    }
+    case 0x0c: { // DW_FORM_flag
+      result.flag = (*p++) != 0;
+      break;
+    }
+    case 0x0d: { // DW_FORM_sdata
+      unsigned size = 0;
+      result.value = decodeSLEB128(p, &size, end);
+      p += size;
+      break;
+    }
+    case 0x0e: { // DW_FORM_strp
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      if (strSection) {
+        result.str = strSection->getString(result.value);
+      } else {
+        result.str = "";
+      }
+      break;
+    }
+    case 0x0f: { // DW_FORM_udata
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x10: // DW_FORM_ref_addr
+    case 0x1c: // DW_FORM_ref_sup4
+    case 0x24: // DW_FORM_ref_sup8
+    case 0x20:
+    case 0x14: { // DW_FORM_ref_sig8
+      result.value = *reinterpret_cast<const uint64_t *>(p);
+      p += 8;
+      break;
+    }
+    case 0x11: {
+      result.value = *p++;
+      break;
+    }
+    case 0x12: {
+      result.value = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      break;
+    }
+    case 0x13: {
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x15: { // DW_FORM_ref_udata
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x16: { // DW_FORM_indirect
+      unsigned len = 0;
+      uint64_t actualForm = decodeULEB128(p, &len, end);
+      p += len;
+      return parseFormValue(actualForm, p, end, strOffsets, strSection,
+                            addrSection, dieOffset);
+    }
+    case 0x17: { // DW_FORM_sec_offset
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x18: { // DW_FORM_exprloc
+      unsigned len = 0;
+      uint64_t size = decodeULEB128(p, &len, end);
+      p += len;
+      result.blockData.insert(result.blockData.end(), p, p + size);
+      p += size;
+      break;
+    }
+    case 0x19: {
+      result.flag = true;
+      break;
+    }
+    case 0x1b: {
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x1d:
+    case 0x1f: { // DW_FORM_strp_sup
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      result.str = std::to_string(result.value);
+      p += 4;
+      break;
+    }
+    case 0x1e: { // DW_FORM_data16
+      result.blockData.insert(result.blockData.end(), p, p + 16);
+      p += 16;
+      break;
+    }
+    case 0x21: { // DW_FORM_implicit_const
+      if (implicitConst.has_value())
+        result.value = implicitConst.value();
+      else
+        llvm::errs() << "DW_FORM_implicit_const missing value at DIE offset 0x"
+                     << intToHex(dieOffset, 8) << "\n";
+      break;
+      break;
+    }
+    case 0x22:
+    case 0x23: { // DW_FORM_rnglistx
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    case 0x25: { // DW_FORM_strx1
+      result.value = *p++;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
+    }
+
+    case 0x1a:   // DW_FORM_strx
+    case 0x26:   // DW_FORM_strx2
+    case 0x27:   // DW_FORM_strx3
+    case 0x28: { // DW_FORM_strx4
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
+    }
+    case 0x29:
+    case 0x2a:
+    case 0x2b:
+    case 0x2c: { // DW_FORM_addrx[1-4]
+      unsigned len = 0;
+      result.value = decodeULEB128(p, &len, end);
+      p += len;
+      break;
+    }
+    default:
+      llvm::errs() << "Unsupported form 0x" + intToHex(form, 2);
+    }
+    result.rawBytes.assign(start, p);
+    return result;
   }
 };
 
@@ -1723,15 +2628,17 @@ private:
   const DebugStrSection &debugStr;
   const DebugStrOffsetsSection &debugStrOffset;
   const DebugAddrSection &debugAddr;
+  const DebugRnglistSection &debugRnglist;
 
 public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
                    const DebugAbbrevSection &abbrevRef,
                    const DebugStrSection &strRef,
                    const DebugStrOffsetsSection &strOffsetRef,
-                   const DebugAddrSection &addrRef)
+                   const DebugAddrSection &addrRef,
+                   const DebugRnglistSection &rnglistRef)
       : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef),
-        debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef) {
+        debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef), debugRnglist(rnglistRef) {
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
     const uint8_t *end = start + sh_size;
     const uint8_t *p = start;
@@ -1838,6 +2745,11 @@ public:
                                   &debugAddr, die.offset, strOffsetsTableIndex,
                                   addrBaseOffset);
       die.attributes.emplace_back(af.attr, valueRaw);
+
+      if (af.attr == 0x55 /* DW_AT_ranges */) {
+        uint32_t rnglistIndex = static_cast<uint32_t>(valueRaw.value);
+        debugRnglist.registerAddrBase(rnglistIndex, addrBaseOffset);
+      }
     }
 
     if (decl->hasChildren) {

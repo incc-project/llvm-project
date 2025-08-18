@@ -64,6 +64,7 @@ private:
   std::shared_ptr<DebugInfoSection> debugInfoSection;
   std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
   std::shared_ptr<DebugAddrSection> debugAddr;
+  std::shared_ptr<DebugRnglistSection> debugRnglist;
   std::shared_ptr<RelocationSection> relaDebugStrOffsets;
   std::shared_ptr<RelocationSection> relaDebugAddr;
 
@@ -202,6 +203,10 @@ private:
     const char* debugAddrData = nullptr;
     size_t debugAddrIndex = -1;
 
+    const llvm::object::ELF64LE::Shdr* debugRnglistShdr = nullptr;
+    const char* debugRnglistData = nullptr;
+    size_t debugRnglistIndex = -1;
+
     for (size_t i = 0; i < sections.size(); i++) {
       const auto secName =
         shstrTab->parseOriginalIndex(shdrs[i]->sh_name);
@@ -265,6 +270,13 @@ private:
         continue;
       }
 
+      if (secNameStr == ".debug_rnglists") {
+        debugRnglistShdr = shdrs[i];
+        debugRnglistData = object + shdrs[i]->sh_offset;
+        debugRnglistIndex = i;
+        continue;
+      }
+
       switch (shdrs[i]->sh_type) {
       case llvm::ELF::SHT_STRTAB:
       case llvm::ELF::SHT_SYMTAB:
@@ -310,10 +322,15 @@ private:
       }
     }
 
+    if (debugRnglistShdr) {
+      debugRnglist = std::make_shared<DebugRnglistSection>(debugRnglistShdr, debugRnglistData, *debugAddr);
+      sections[debugRnglistIndex] = debugRnglist;
+    }
+
     if (debugInfoShdr) {
       assert(debugAbbrev != nullptr && debugStr != nullptr && debugAddr != nullptr);
       debugInfoSection = std::make_shared<DebugInfoSection>(
-          debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, *debugStrOff, *debugAddr);
+          debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, *debugStrOff, *debugAddr, *debugRnglist);
       sections[debugInfoIndex] = debugInfoSection;
     }
 

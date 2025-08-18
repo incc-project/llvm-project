@@ -61,6 +61,7 @@ enum class SectionType {
   DebugStrOffsets,
   DebugAddr,
   DebugLine,
+  DebugRnglists,
 };
 
 // Refer to llvm/include/llvm/BinaryFormat/ELF.h

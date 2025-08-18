@@ -589,7 +589,7 @@ std::string skipFormValue(uint64_t form, const uint8_t *&p, const uint8_t *end,
     unsigned len = 0;
     uint64_t index = decodeULEB128(p, &len, end);
     p += len;
-    return "addrx[]";
+    return "addrx[]" + intToHex(index, 2);
   }
   case 0x1d: { // DW_FORM_strp_sup
     uint32_t offset = *reinterpret_cast<const uint32_t *>(p);
