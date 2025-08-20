@@ -1570,6 +1570,7 @@ private:
   std::map<uint32_t, std::vector<RnglistEntry>> rangeLists;
 //  const DebugAddrSection &debugAddr;
   const DebugAddrSection *debugAddr;
+  uint64_t baseOffset;
   mutable std::unordered_map<uint32_t, uint64_t> contextMap;
 public:
   DebugRnglistSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const DebugAddrSection *addrRef)
@@ -1636,6 +1637,7 @@ public:
       case 0x05: // DW_RLE_base_address
         // addr_size bytes
         entry.value0 = llvm::support::endian::read64le(p); // assume addr_size = 8
+        baseOffset = entry.value0;
         p += header.addr_size;
         break;
 
@@ -1671,19 +1673,21 @@ public:
         << ", seg_size = 0x" << std::setw(2) << static_cast<int>(header.seg_size)
         << ", offset_entry_count = 0x" << std::setw(8) << header.offset_entry_count << "\n";
 
-    oss << "offsets: [\n";
-    for (auto offset : offsets) {
-      oss << "0x" << std::hex << std::setw(8) << std::setfill('0') << offset << "\n";
+    if (!offsets.empty()){
+      oss << "offsets: [\n";
+      for (auto offset : offsets) {
+        oss << "0x" << std::hex << std::setw(8) << std::setfill('0') << offset << "\n";
+      }
+      oss << "]\n";
     }
-    oss << "]\n";
 
     oss << "ranges:\n";
     for (auto &rangeList : rangeLists) {
-      uint64_t baseOffset = 0;
+      uint64_t cuBaseOffset = 0;
 
       auto it = contextMap.find(rangeList.first);
       if (it != contextMap.end()) {
-        baseOffset = it->second;
+        cuBaseOffset = it->second;
       }
       for (const auto &entry : rangeList.second) {
         if (entry.kind == 0x00) {
@@ -1694,7 +1698,7 @@ public:
         case 0x01: {
           assert(debugAddr != nullptr);
           uint64_t baseAddr =
-              debugAddr->getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << baseAddr << ")\n";
           break;
@@ -1702,9 +1706,9 @@ public:
         case 0x02: {
           assert(debugAddr != nullptr);
           uint64_t startAddr =
-              debugAddr->getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
           uint64_t endAddr =
-              debugAddr->getAddressByIndex(baseOffset, entry.value1);
+              debugAddr->getAddressByIndex(cuBaseOffset, entry.value1);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << startAddr << ", 0x" << std::setw(16) << endAddr << ")\n";
           break;
@@ -1712,7 +1716,7 @@ public:
         case 0x03: {
           assert(debugAddr != nullptr);
           uint64_t startAddr =
-              debugAddr->getAddressByIndex(baseOffset, entry.value0);
+              debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
               << startAddr << ", 0x" << std::setw(16) << entry.value1 << ")\n";
           break;
@@ -1721,37 +1725,16 @@ public:
         case 0x06:
         case 0x07: {
           oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
-              << entry.value0 << ", 0x" << std::setw(16) << entry.value1
+              << baseOffset + entry.value0 << ", 0x" << std::setw(16) << baseOffset + entry.value1
               << ")\n";
           break;
         }
-        case 0x05: {
-          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
-              << entry.value0 << ")\n";
-          break;
+//        case 0x05: {
+//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
+//              << entry.value0 << ")\n";
+//          break;
+//        }
         }
-        }
-        //        if (entry.kind == 0x01) { // DW_RLE_base_addressx
-//            uint64_t baseAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
-//            oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << baseAddr
-//                << ")\n";
-//        }
-//        else if (entry.kind == 0x02) { // DW_RLE_startx_endx
-//          uint64_t startAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
-//          uint64_t endAddr   = debugAddr.getAddressByIndex(baseOffset, entry.value1);
-//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << startAddr
-//              << ", 0x" << std::setw(16) << endAddr << ")\n";
-//        }
-//        else if (entry.kind == 0x03) { // DW_RLE_startx_length
-//          uint64_t startAddr = debugAddr.getAddressByIndex(baseOffset, entry.value0);
-//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << startAddr
-//              << ", 0x" << std::setw(16) << entry.value1 << ")\n";
-//        }
-//
-//        else {
-//          oss << "[0x" << std::hex << std::setw(16) << std::setfill('0') << entry.value0
-//              << ", 0x" << std::setw(16) << entry.value1 << ")\n";
-//        }
       }
     }
   }
@@ -1891,7 +1874,7 @@ private:
 
   struct Row {
     uint64_t address = 0;
-    uint32_t line = 1;
+    int32_t line = 1;
     uint32_t column = 0;
     uint32_t file = 1;
     uint32_t isa = 0;
@@ -2004,6 +1987,7 @@ public:
         state.basic_block = false;
         state.epilogue_begin = false;
         state.prologue_end = false;
+        state.discriminator = 0;
         continue;
       }
       if (opcode == 0) {
@@ -2028,6 +2012,12 @@ public:
         case 3: // DW_LNE_set_prologue_end
           state.prologue_end = true;
           break;
+        case 4: { // DW_LNE_set_discriminator
+          uint64_t discrim = decodeULEB128(p, &n);
+          p += n;
+          state.discriminator = discrim;
+          break;
+        }
         default: break;
         }
         p = ext_end;
@@ -2039,6 +2029,7 @@ public:
           state.basic_block = false;
           state.prologue_end = false;
           state.epilogue_begin = false;
+          state.discriminator = 0;
           break; // DW_LNS_copy
         case 2: state.address += decodeULEB128(p, &n) * header.min_inst_length; p += n; break;
         case 3: state.line += decodeSLEB128(p, &n); p += n; break;
@@ -2078,61 +2069,61 @@ public:
     }
   }
 
-  void dumpData(std::ostream &oss) const override {
-    oss << ".debug_line contents:\n";
-    oss << "debug_line[0x00000000]\n";
-    oss << "Line table prologue:\n";
-    oss << "    total_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length << "\n";
-    oss << "          format: DWARF32\n";
-    oss << "         version: " << std::dec << header.version << "\n";
-    oss << "    address_size: " << static_cast<int>(header.address_size) << "\n";
-    oss << " seg_select_size: " << static_cast<int>(header.segment_selector_size) << "\n";
-    oss << " prologue_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.header_length << "\n";
-    oss << " min_inst_length: " << std::dec << static_cast<int>(header.min_inst_length) << "\n";
-    oss << "max_ops_per_inst: " << static_cast<int>(header.max_ops_per_inst) << "\n";
-    oss << " default_is_stmt: " << static_cast<int>(header.default_is_stmt) << "\n";
-    oss << "       line_base: " << static_cast<int>(header.line_base) << "\n";
-    oss << "      line_range: " << static_cast<int>(header.line_range) << "\n";
-    oss << "     opcode_base: " << static_cast<int>(header.opcode_base) << "\n";
-
-    for (size_t i = 0; i < header.standard_opcode_lengths.size(); ++i)
-      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i+1) << "] = "
-          << static_cast<int>(header.standard_opcode_lengths[i]) << "\n";
-
-    for (size_t i = 0; i < header.directories.size(); ++i)
-      oss << "include_directories[" << std::setw(3) << i << "] = \"" << std::hex
-          << header.directories[i].value << "\"\n";
-
-    for (size_t i = 0; i < header.file_names.size(); ++i) {
-      const auto &f = header.file_names[i];
-      oss << "file_names[" << std::setw(3) << i << "]:\n";
-      oss << "           name: \"" << f.name << "\"\n";
-      oss << "      dir_index: " << f.dir_index << "\n";
-      oss << "   md5_checksum: ";
-      for (uint8_t b : f.md5)
-        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
-      oss << std::dec << "\n";
-    }
-
-    oss << "\nAddress             Line    Column  File    ISA  Discriminator  OpIndex  Flags\n";
-    oss << "------------------  ------  ------  ------  ---  -------------  -------  -------------\n";
-    for (const auto &row : rows) {
-      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << row.address << "  ";
-      oss << std::dec << std::setw(6) << row.line << "  ";
-      oss << std::setw(6) << row.column << "  ";
-      oss << std::setw(6) << row.file << "  ";
-      oss << std::setw(3) << row.isa << "  ";
-      oss << std::setw(13) << row.discriminator << "  ";
-      oss << std::setw(7) << row.op_index << "  ";
-      std::string flags;
-      if (row.is_stmt) flags += "is_stmt ";
-      if (row.basic_block) flags += "basic_block ";
-      if (row.prologue_end) flags += "prologue_end ";
-      if (row.end_sequence) flags += "end_sequence ";
-      if (row.epilogue_begin) flags += "epilogue_begin ";
-      oss << flags << "\n";
-    }
-  }
+//  void dumpData(std::ostream &oss) const override {
+//    oss << ".debug_line contents:\n";
+//    oss << "debug_line[0x00000000]\n";
+//    oss << "Line table prologue:\n";
+//    oss << "    total_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length << "\n";
+//    oss << "          format: DWARF32\n";
+//    oss << "         version: " << std::dec << header.version << "\n";
+//    oss << "    address_size: " << static_cast<int>(header.address_size) << "\n";
+//    oss << " seg_select_size: " << static_cast<int>(header.segment_selector_size) << "\n";
+//    oss << " prologue_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.header_length << "\n";
+//    oss << " min_inst_length: " << std::dec << static_cast<int>(header.min_inst_length) << "\n";
+//    oss << "max_ops_per_inst: " << static_cast<int>(header.max_ops_per_inst) << "\n";
+//    oss << " default_is_stmt: " << static_cast<int>(header.default_is_stmt) << "\n";
+//    oss << "       line_base: " << static_cast<int>(header.line_base) << "\n";
+//    oss << "      line_range: " << static_cast<int>(header.line_range) << "\n";
+//    oss << "     opcode_base: " << static_cast<int>(header.opcode_base) << "\n";
+//
+//    for (size_t i = 0; i < header.standard_opcode_lengths.size(); ++i)
+//      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i+1) << "] = "
+//          << static_cast<int>(header.standard_opcode_lengths[i]) << "\n";
+//
+//    for (size_t i = 0; i < header.directories.size(); ++i)
+//      oss << "include_directories[" << std::setw(3) << i << "] = \"" << std::hex
+//          << header.directories[i].value << "\"\n";
+//
+//    for (size_t i = 0; i < header.file_names.size(); ++i) {
+//      const auto &f = header.file_names[i];
+//      oss << "file_names[" << std::setw(3) << i << "]:\n";
+//      oss << "           name: \"" << f.name << "\"\n";
+//      oss << "      dir_index: " << f.dir_index << "\n";
+//      oss << "   md5_checksum: ";
+//      for (uint8_t b : f.md5)
+//        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+//      oss << std::dec << "\n";
+//    }
+//
+//    oss << "\nAddress             Line    Column  File    ISA  Discriminator  OpIndex  Flags\n";
+//    oss << "------------------  ------  ------  ------  ---  -------------  -------  -------------\n";
+//    for (const auto &row : rows) {
+//      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << row.address << "  ";
+//      oss << std::dec << std::setw(6) << row.line << "  ";
+//      oss << std::setw(6) << row.column << "  ";
+//      oss << std::setw(6) << row.file << "  ";
+//      oss << std::setw(3) << row.isa << "  ";
+//      oss << std::setw(13) << row.discriminator << "  ";
+//      oss << std::setw(7) << row.op_index << "  ";
+//      std::string flags;
+//      if (row.is_stmt) flags += "is_stmt ";
+//      if (row.basic_block) flags += "basic_block ";
+//      if (row.prologue_end) flags += "prologue_end ";
+//      if (row.end_sequence) flags += "end_sequence ";
+//      if (row.epilogue_begin) flags += "epilogue_begin ";
+//      oss << flags << "\n";
+//    }
+//  }
 
   void writeDataTo(char *buffer) override {
     std::vector<uint8_t> out;
@@ -2299,17 +2290,18 @@ public:
           out.push_back((row.address >> (i * 8)) & 0xff);
         prev.address = row.address;
       }
-
+      int64_t tempSigned;
       uint64_t Temp, Opcode;
       bool needCopy = false;
 
-      Temp = lineDelta - header.line_base;
+      tempSigned = lineDelta - header.line_base;
 
-      if (Temp >= header.line_range || Temp + header.opcode_base > 255) {
+      if (tempSigned >= header.line_range || tempSigned + header.opcode_base > 255 || tempSigned < 0) {
         out.push_back(3);
-        encodeULEB128(lineDelta, out);
+        encodeSLEB128(lineDelta, out);
         lineDelta = 0;
-        Temp = 0 - header.line_base;
+        prev.line = row.line;
+        tempSigned = 0 - header.line_base;
         needCopy = true;
       }
 
@@ -2318,7 +2310,7 @@ public:
         continue;
       }
 
-      Temp += header.opcode_base;
+      Temp = static_cast<uint64_t>(tempSigned) + header.opcode_base;
 
       if (addrDelta >= 0 && static_cast<uint64_t>(addrDelta) < 256 + maxSpecialAddrDelta) {
         Opcode = Temp + addrDelta * header.line_range;
@@ -2630,7 +2622,7 @@ private:
   const DebugStrSection &debugStr;
   const DebugStrOffsetsSection *debugStrOffset;
   const DebugAddrSection *debugAddr;
-  const DebugRnglistSection &debugRnglist;
+  const DebugRnglistSection *debugRnglist;
 
 public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
@@ -2638,7 +2630,7 @@ public:
                    const DebugStrSection &strRef,
                    const DebugStrOffsetsSection *strOffsetRef,
                    const DebugAddrSection *addrRef,
-                   const DebugRnglistSection &rnglistRef)
+                   const DebugRnglistSection *rnglistRef)
       : Section(SectionType::DebugInfo, shdr, _data), abbrev(abbrevRef),
         debugStr(strRef), debugStrOffset(strOffsetRef), debugAddr(addrRef), debugRnglist(rnglistRef) {
     const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
@@ -2751,7 +2743,8 @@ public:
 
       if (af.attr == 0x55 /* DW_AT_ranges */) {
         uint32_t rnglistIndex = static_cast<uint32_t>(valueRaw.value);
-        debugRnglist.registerAddrBase(rnglistIndex, addrBaseOffset);
+        assert(debugRnglist != nullptr);
+        debugRnglist->registerAddrBase(rnglistIndex, addrBaseOffset);
       }
     }
 

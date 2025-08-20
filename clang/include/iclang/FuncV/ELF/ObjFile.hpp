@@ -329,9 +329,9 @@ private:
     }
 
     if (debugInfoShdr) {
-      assert(debugAbbrev != nullptr && debugStr != nullptr  && debugAbbrev != nullptr && debugRnglist != nullptr);
+      assert(debugAbbrev != nullptr && debugStr != nullptr);
       debugInfoSection = std::make_shared<DebugInfoSection>(
-          debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, debugStrOff ? debugStrOff.get() : nullptr, debugAddr ? debugAddr.get() : nullptr, *debugRnglist);
+          debugInfoShdr, debugInfoData, *debugAbbrev, *debugStr, debugStrOff ? debugStrOff.get() : nullptr, debugAddr ? debugAddr.get() : nullptr, debugRnglist ? debugRnglist.get() : nullptr);
       sections[debugInfoIndex] = debugInfoSection;
     }
 
