@@ -737,6 +737,22 @@ void writeFormValue(const FormValueRaw &val, std::vector<uint8_t> &out)  {
     // 由 abbrev 编码，无需写入
     break;
   }
+  case 0x26: { // strx2
+    out.push_back(val.value & 0xFF);
+    out.push_back((val.value >> 8) & 0xFF);
+    break;
+  }
+  case 0x27: { // strx3
+    out.push_back(val.value & 0xFF);
+    out.push_back((val.value >> 8) & 0xFF);
+    out.push_back((val.value >> 16) & 0xFF);
+    break;
+  }
+  case 0x28: { // strx4
+    for (int i = 0; i < 4; ++i)
+      out.push_back((val.value >> (i * 8)) & 0xFF);
+    break;
+  }
   case 0x16: {
     // indirect: 不应直接写出，应写入嵌套 form 编码
     llvm::errs() << "DW_FORM_indirect should not reach writeFormValue\n";

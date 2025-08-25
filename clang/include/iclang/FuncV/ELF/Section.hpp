@@ -2069,61 +2069,61 @@ public:
     }
   }
 
-//  void dumpData(std::ostream &oss) const override {
-//    oss << ".debug_line contents:\n";
-//    oss << "debug_line[0x00000000]\n";
-//    oss << "Line table prologue:\n";
-//    oss << "    total_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length << "\n";
-//    oss << "          format: DWARF32\n";
-//    oss << "         version: " << std::dec << header.version << "\n";
-//    oss << "    address_size: " << static_cast<int>(header.address_size) << "\n";
-//    oss << " seg_select_size: " << static_cast<int>(header.segment_selector_size) << "\n";
-//    oss << " prologue_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.header_length << "\n";
-//    oss << " min_inst_length: " << std::dec << static_cast<int>(header.min_inst_length) << "\n";
-//    oss << "max_ops_per_inst: " << static_cast<int>(header.max_ops_per_inst) << "\n";
-//    oss << " default_is_stmt: " << static_cast<int>(header.default_is_stmt) << "\n";
-//    oss << "       line_base: " << static_cast<int>(header.line_base) << "\n";
-//    oss << "      line_range: " << static_cast<int>(header.line_range) << "\n";
-//    oss << "     opcode_base: " << static_cast<int>(header.opcode_base) << "\n";
-//
-//    for (size_t i = 0; i < header.standard_opcode_lengths.size(); ++i)
-//      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i+1) << "] = "
-//          << static_cast<int>(header.standard_opcode_lengths[i]) << "\n";
-//
-//    for (size_t i = 0; i < header.directories.size(); ++i)
-//      oss << "include_directories[" << std::setw(3) << i << "] = \"" << std::hex
-//          << header.directories[i].value << "\"\n";
-//
-//    for (size_t i = 0; i < header.file_names.size(); ++i) {
-//      const auto &f = header.file_names[i];
-//      oss << "file_names[" << std::setw(3) << i << "]:\n";
-//      oss << "           name: \"" << f.name << "\"\n";
-//      oss << "      dir_index: " << f.dir_index << "\n";
-//      oss << "   md5_checksum: ";
-//      for (uint8_t b : f.md5)
-//        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
-//      oss << std::dec << "\n";
-//    }
-//
-//    oss << "\nAddress             Line    Column  File    ISA  Discriminator  OpIndex  Flags\n";
-//    oss << "------------------  ------  ------  ------  ---  -------------  -------  -------------\n";
-//    for (const auto &row : rows) {
-//      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << row.address << "  ";
-//      oss << std::dec << std::setw(6) << row.line << "  ";
-//      oss << std::setw(6) << row.column << "  ";
-//      oss << std::setw(6) << row.file << "  ";
-//      oss << std::setw(3) << row.isa << "  ";
-//      oss << std::setw(13) << row.discriminator << "  ";
-//      oss << std::setw(7) << row.op_index << "  ";
-//      std::string flags;
-//      if (row.is_stmt) flags += "is_stmt ";
-//      if (row.basic_block) flags += "basic_block ";
-//      if (row.prologue_end) flags += "prologue_end ";
-//      if (row.end_sequence) flags += "end_sequence ";
-//      if (row.epilogue_begin) flags += "epilogue_begin ";
-//      oss << flags << "\n";
-//    }
-//  }
+  void dumpData(std::ostream &oss) const override {
+    oss << ".debug_line contents:\n";
+    oss << "debug_line[0x00000000]\n";
+    oss << "Line table prologue:\n";
+    oss << "    total_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.unit_length << "\n";
+    oss << "          format: DWARF32\n";
+    oss << "         version: " << std::dec << header.version << "\n";
+    oss << "    address_size: " << static_cast<int>(header.address_size) << "\n";
+    oss << " seg_select_size: " << static_cast<int>(header.segment_selector_size) << "\n";
+    oss << " prologue_length: 0x" << std::hex << std::setw(8) << std::setfill('0') << header.header_length << "\n";
+    oss << " min_inst_length: " << std::dec << static_cast<int>(header.min_inst_length) << "\n";
+    oss << "max_ops_per_inst: " << static_cast<int>(header.max_ops_per_inst) << "\n";
+    oss << " default_is_stmt: " << static_cast<int>(header.default_is_stmt) << "\n";
+    oss << "       line_base: " << static_cast<int>(header.line_base) << "\n";
+    oss << "      line_range: " << static_cast<int>(header.line_range) << "\n";
+    oss << "     opcode_base: " << static_cast<int>(header.opcode_base) << "\n";
+
+    for (size_t i = 0; i < header.standard_opcode_lengths.size(); ++i)
+      oss << "standard_opcode_lengths[DW_LNS_" << opcodeName(i+1) << "] = "
+          << static_cast<int>(header.standard_opcode_lengths[i]) << "\n";
+
+    for (size_t i = 0; i < header.directories.size(); ++i)
+      oss << "include_directories[" << std::setw(3) << i << "] = \"" << std::hex
+          << header.directories[i].value << "\"\n";
+
+    for (size_t i = 0; i < header.file_names.size(); ++i) {
+      const auto &f = header.file_names[i];
+      oss << "file_names[" << std::setw(3) << i << "]:\n";
+      oss << "           name: \"" << f.name << "\"\n";
+      oss << "      dir_index: " << f.dir_index << "\n";
+      oss << "   md5_checksum: ";
+      for (uint8_t b : f.md5)
+        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+      oss << std::dec << "\n";
+    }
+
+    oss << "\nAddress             Line    Column  File    ISA  Discriminator  OpIndex  Flags\n";
+    oss << "------------------  ------  ------  ------  ---  -------------  -------  -------------\n";
+    for (const auto &row : rows) {
+      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << row.address << "  ";
+      oss << std::dec << std::setw(6) << row.line << "  ";
+      oss << std::setw(6) << row.column << "  ";
+      oss << std::setw(6) << row.file << "  ";
+      oss << std::setw(3) << row.isa << "  ";
+      oss << std::setw(13) << row.discriminator << "  ";
+      oss << std::setw(7) << row.op_index << "  ";
+      std::string flags;
+      if (row.is_stmt) flags += "is_stmt ";
+      if (row.basic_block) flags += "basic_block ";
+      if (row.prologue_end) flags += "prologue_end ";
+      if (row.end_sequence) flags += "end_sequence ";
+      if (row.epilogue_begin) flags += "epilogue_begin ";
+      oss << flags << "\n";
+    }
+  }
 
   void writeDataTo(char *buffer) override {
     std::vector<uint8_t> out;
@@ -2619,7 +2619,7 @@ private:
   std::vector<CompileUnitHeader> cuHeaders; // Compile unit headers
   std::vector<std::vector<DIE>> cuDIEs; // Array of top-level DIEs for each CU
   const DebugAbbrevSection &abbrev;
-  const DebugStrSection &debugStr;
+  const DebugStrSection *debugStr;
   const DebugStrOffsetsSection *debugStrOffset;
   const DebugAddrSection *debugAddr;
   const DebugRnglistSection *debugRnglist;
@@ -2627,7 +2627,7 @@ private:
 public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
                    const DebugAbbrevSection &abbrevRef,
-                   const DebugStrSection &strRef,
+                   const DebugStrSection *strRef,
                    const DebugStrOffsetsSection *strOffsetRef,
                    const DebugAddrSection *addrRef,
                    const DebugRnglistSection *rnglistRef)
@@ -2732,11 +2732,11 @@ public:
     for (const auto &af : decl->attrForms) {
       FormValueRaw valueRaw;
       if (af.form == 0x21)
-        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, &debugStr,
+        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, debugStr,
                                   debugAddr, die.offset, strOffsetsTableIndex,addrBaseOffset,
                                   af.implicitConst.value());
       else
-        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, &debugStr,
+        valueRaw = parseFormValue(af.form, p, end, debugStrOffset, debugStr,
                                   debugAddr, die.offset, strOffsetsTableIndex,
                                   addrBaseOffset);
       die.attributes.emplace_back(af.attr, valueRaw);
@@ -3079,10 +3079,7 @@ public:
       break;
     }
 
-    case 0x1a:   // DW_FORM_strx
-    case 0x26:   // DW_FORM_strx2
-    case 0x27:   // DW_FORM_strx3
-    case 0x28: { // DW_FORM_strx4
+    case 0x1a: { // DW_FORM_strx
       unsigned len = 0;
       result.value = decodeULEB128(p, &len, end);
       p += len;
@@ -3092,6 +3089,30 @@ public:
       }
       break;
     }
+    case 0x26: // strx2
+      result.value = *reinterpret_cast<const uint16_t *>(p);
+      p += 2;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
+    case 0x27: // strx3
+      result.value = (*reinterpret_cast<const uint32_t *>(p)) & 0xFFFFFFu;
+      p += 3;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
+    case 0x28: // strx4
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      if (strOffsets && strSection && strOffsetsTableIndex >= 0) {
+        result.str =
+            strOffsets->getStringFromStrx(strOffsetsTableIndex, result.value);
+      }
+      break;
     case 0x29:
     case 0x2a:
     case 0x2b:
