@@ -332,6 +332,7 @@ private:
       assert(debugAbbrev != nullptr);
       debugInfoSection = std::make_shared<DebugInfoSection>(
           debugInfoShdr, debugInfoData, *debugAbbrev, debugStr ? debugStr.get() : nullptr , debugStrOff ? debugStrOff.get() : nullptr, debugAddr ? debugAddr.get() : nullptr, debugRnglist ? debugRnglist.get() : nullptr);
+      sections[debugInfoIndex] = debugInfoSection;
     }
 
     // 3. Parse references. (depend on 2)
