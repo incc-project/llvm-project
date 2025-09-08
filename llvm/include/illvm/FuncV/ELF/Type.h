@@ -40,6 +40,16 @@ enum class SectionType {
   RelaTab,
   Group,
   EhFrame,
+  DebugInfo,
+  DebugAbbrev,
+  DebugStr,
+  DebugStrOffsets,
+  DebugAddr,
+  DebugLine,
+  DebugRnglists,
+  DebugLineStr,
+  DebugAranges,
+  DebugLoclists,
 };
 
 // Refer to llvm/include/llvm/BinaryFormat/ELF.h

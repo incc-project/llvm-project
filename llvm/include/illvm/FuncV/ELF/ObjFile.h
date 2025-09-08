@@ -64,6 +64,16 @@ private:
   std::shared_ptr<EhFrameSection> ehFrame = nullptr;
   std::shared_ptr<RelocationSection> relaEhFrame = nullptr;
 
+  std::shared_ptr<DebugAbbrevSection> debugAbbrev;
+  std::shared_ptr<DebugStrSection> debugStr;
+  std::shared_ptr<DebugLineStrSection> debugLineStr;
+  std::shared_ptr<DebugInfoSection> debugInfoSection;
+  std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
+  std::shared_ptr<DebugAddrSection> debugAddr;
+  std::shared_ptr<DebugRnglistSection> debugRnglist;
+  std::shared_ptr<RelocationSection> relaDebugStrOffsets;
+  std::shared_ptr<RelocationSection> relaDebugAddr;
+
   static bool getIsRela(const uint16_t m);
 
   void parseHeader();

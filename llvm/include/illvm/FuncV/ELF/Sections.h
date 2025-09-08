@@ -26,5 +26,15 @@
 #include "illvm/FuncV/ELF/RelocationSection.h"
 #include "illvm/FuncV/ELF/StringTableSection.h"
 #include "illvm/FuncV/ELF/SymbolTableSection.h"
+#include "illvm/FuncV/ELF/DebugAbbrevSection.h"
+#include "illvm/FuncV/ELF/DebugAddrSection.h"
+#include "illvm/FuncV/ELF/DebugArangeSection.h"
+#include "illvm/FuncV/ELF/DebugInfoSection.h"
+#include "illvm/FuncV/ELF/DebugLineSection.h"
+#include "illvm/FuncV/ELF/DebugLineStrSection.h"
+#include "illvm/FuncV/ELF/DebugLoclistsSection.h"
+#include "illvm/FuncV/ELF/DebugRnglistSection.h"
+#include "illvm/FuncV/ELF/DebugStrOffsetsSection.h"
+#include "illvm/FuncV/ELF/DebugStrSection.h"
 
 #endif // ILLVM_SECTIONS_H

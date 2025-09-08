@@ -1,5 +1,16 @@
 add_llvm_component_library(ILLVMFuncVELF
   BDG.cpp
+  DebugAbbrevSection.cpp
+  DebugAddrSection.cpp
+  DebugArangeSection.cpp
+  DebugBase.cpp
+  DebugInfoSection.cpp
+  DebugLineSection.cpp
+  DebugLineStrSection.cpp
+  DebugLoclistsSection.cpp
+  DebugRnglistSection.cpp
+  DebugStrOffsetsSection.cpp
+  DebugStrSection.cpp
   EhFrame.cpp
   EHFrameSection.cpp
   FuncV.cpp

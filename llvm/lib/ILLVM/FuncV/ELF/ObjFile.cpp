@@ -100,14 +100,115 @@ void ObjFile::parseOtherSections(
     const char *object,
     const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs) {
 
+  const llvm::object::ELF64LE::Shdr *debugInfoShdr = nullptr;
+  const char *debugInfoData = nullptr;
+  size_t debugInfoIndex = -1;
+
+  const llvm::object::ELF64LE::Shdr *debugStrOffShdr = nullptr;
+  const char *debugStrOffData = nullptr;
+  size_t debugStrOffIndex = -1;
+
+  const llvm::object::ELF64LE::Shdr *debugAddrShdr = nullptr;
+  const char *debugAddrData = nullptr;
+  size_t debugAddrIndex = -1;
+
+  const llvm::object::ELF64LE::Shdr *debugRnglistShdr = nullptr;
+  const char *debugRnglistData = nullptr;
+  size_t debugRnglistIndex = -1;
+
   for (size_t i = 0; i < sections.size(); i++) {
     const auto secName = shstrTab->parseOriginalIndex(shdrs[i]->sh_name);
-    if (secName->getValue() == ".eh_frame") {
+    const auto secNameStr = secName->getValue();
+
+    if (secNameStr == ".eh_frame") {
       sections[i] = std::make_shared<EhFrameSection>(
           shdrs[i], object + shdrs[i]->sh_offset);
       ehFrame = std::static_pointer_cast<EhFrameSection>(sections[i]);
       continue;
     }
+
+    if (secNameStr == ".debug_abbrev") {
+      debugAbbrev = std::make_shared<DebugAbbrevSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      sections[i] = debugAbbrev; // 保存进 sections 映射
+      continue;
+    }
+
+    if (secNameStr == ".debug_info") {
+      // 延迟构造 .debug_info，暂时记录必要信息
+      debugInfoShdr = shdrs[i];
+      debugInfoData = object + shdrs[i]->sh_offset;
+      debugInfoIndex = i;
+      continue;
+    }
+
+    if (secNameStr == ".debug_str_offsets") {
+      debugStrOffShdr = shdrs[i];
+      debugStrOffData = object + shdrs[i]->sh_offset;
+      debugStrOffIndex = i;
+      continue;
+    }
+
+    if (secNameStr == ".debug_str") {
+      debugStr = std::make_shared<DebugStrSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      sections[i] = debugStr;
+      continue;
+    }
+
+    if (secNameStr == ".debug_line_str") {
+      debugLineStr = std::make_shared<DebugLineStrSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      sections[i] = debugLineStr;
+      continue;
+    }
+
+    if (secNameStr == ".rela.debug_str_offsets") {
+      relaDebugStrOffsets = std::static_pointer_cast<RelocationSection>(
+          sections[i] = std::make_shared<RelocationSection>(
+              shdrs[i], object + shdrs[i]->sh_offset));
+      continue;
+    }
+
+    if (secNameStr == ".debug_addr") {
+      debugAddrShdr = shdrs[i];
+      debugAddrData = object + shdrs[i]->sh_offset;
+      debugAddrIndex = i;
+      continue;
+    }
+
+    if (secNameStr == ".rela.debug_addr") {
+      relaDebugAddr = std::static_pointer_cast<RelocationSection>(
+          sections[i] = std::make_shared<RelocationSection>(
+              shdrs[i], object + shdrs[i]->sh_offset));
+      continue;
+    }
+
+    if (secNameStr == ".debug_line") {
+      sections[i] = std::make_shared<DebugLineSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      continue;
+    }
+
+    if (secNameStr == ".debug_rnglists") {
+      debugRnglistShdr = shdrs[i];
+      debugRnglistData = object + shdrs[i]->sh_offset;
+      debugRnglistIndex = i;
+      continue;
+    }
+
+    if (secNameStr == ".debug_loclists") {
+      sections[i] = std::make_shared<DebugLoclistsSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      continue;
+    }
+
+    if (secNameStr == ".debug_aranges") {
+      sections[i] = std::make_shared<DebugArangeSection>(
+          shdrs[i], object + shdrs[i]->sh_offset);
+      continue;
+    }
+
     switch (shdrs[i]->sh_type) {
     case llvm::ELF::SHT_STRTAB:
     case llvm::ELF::SHT_SYMTAB:
@@ -131,6 +232,47 @@ void ObjFile::parseOtherSections(
   }
 
   assert(ehFrame != nullptr && relaEhFrame != nullptr);
+
+  // TODO Handle rela after 3.4.
+  if (debugStrOffShdr) {
+    assert(debugStr != nullptr);
+    debugStrOff = std::make_shared<DebugStrOffsetsSection>(
+        debugStrOffShdr, debugStrOffData, *debugStr);
+    sections[debugStrOffIndex] = debugStrOff;
+
+    if (relaDebugStrOffsets) {
+      debugStrOff->applyRelocations(relaDebugStrOffsets->getRelocations());
+    }
+  }
+
+  if (debugAddrShdr) {
+    debugAddr =
+        std::make_shared<DebugAddrSection>(debugAddrShdr, debugAddrData);
+    sections[debugAddrIndex] = debugAddr;
+
+    if (relaDebugAddr) {
+      debugAddr->applyRelocations(relaDebugAddr->getRelocations());
+    }
+  }
+
+  if (debugRnglistShdr) {
+    //      assert(debugAddr != nullptr);
+    debugRnglist = std::make_shared<DebugRnglistSection>(
+        debugRnglistShdr, debugRnglistData,
+        debugAddr ? debugAddr.get() : nullptr);
+    sections[debugRnglistIndex] = debugRnglist;
+  }
+
+  if (debugInfoShdr) {
+    assert(debugAbbrev != nullptr);
+    debugInfoSection = std::make_shared<DebugInfoSection>(
+        debugInfoShdr, debugInfoData, *debugAbbrev,
+        debugStr ? debugStr.get() : nullptr,
+        debugStrOff ? debugStrOff.get() : nullptr,
+        debugAddr ? debugAddr.get() : nullptr,
+        debugRnglist ? debugRnglist.get() : nullptr);
+    sections[debugInfoIndex] = debugInfoSection;
+  }
 }
 
 void ObjFile::parseReferences() {
