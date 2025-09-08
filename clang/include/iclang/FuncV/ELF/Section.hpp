@@ -1194,6 +1194,65 @@ public:
 
 };
 
+class DebugLineStrSection final : public Section {
+private:
+  // Structure representing a string entry in .debug_str section
+  struct StringEntry {
+    uint64_t offset;    // Offset within the section
+    std::string str;    // The string content
+  };
+
+  std::vector<StringEntry> strings; // List of string entries
+public:
+  DebugLineStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+      : Section(SectionType::DebugLineStr, shdr, _data) {
+    const char *start = data;
+    const char *end = data + sh_size;
+    uint64_t offset = 0;
+
+    while (start < end) {
+      const char *s = start;
+      size_t len = strlen(s);
+      if (len == 0) {
+        ++start;
+        ++offset;
+        continue;
+      }
+      strings.push_back({offset, std::string(s)});
+      start += len + 1;
+      offset += len + 1;
+    }
+  }
+
+  void writeDataTo(char *buffer) override {
+    std::vector<uint8_t> out;
+
+    for (const auto &entry : strings) {
+      for (char c : entry.str) {
+        out.push_back(static_cast<uint8_t>(c));
+      }
+      out.push_back(0);
+    }
+
+    assert(out.size() <= sh_size && "Rewritten .debug_str larger than original");
+    memcpy(buffer, out.data(), out.size());
+  }
+
+  void dumpData(std::ostream &oss) const override {
+    oss << ".debug_line_str contents:\n";
+    for (const auto &entry : strings) {
+      oss << "0x" << intToHex(entry.offset, 8) << ": \"" << entry.str << "\"\n";
+    }
+  }
+
+  // Get string by offset
+  std::string getString(uint32_t offset) const {
+    if (offset >= sh_size) return "<invalid offset>";
+    return std::string(data + offset);
+  }
+
+};
+
 class DebugAddrSection final : public Section {
 private:
   // TODO: block struct -> rela. Note: debug_info -> block ref.
@@ -2052,7 +2111,7 @@ public:
           state.prologue_end = true;
           break;
         case 11: // DW_LNS_set_epilogue_begin
-          state.epilogue_begin = true; // optional: your Row struct可加epilogueBegin字段
+          state.epilogue_begin = true;
           break;
         case 12: // DW_LNS_set_isa
           state.isa = decodeULEB128(p, &n); p += n;
@@ -2099,6 +2158,7 @@ public:
       oss << "file_names[" << std::setw(3) << i << "]:\n";
       oss << "           name: \"" << f.name << "\"\n";
       oss << "      dir_index: " << f.dir_index << "\n";
+      if (header.file_names.size() <= 1)
       oss << "   md5_checksum: ";
       for (uint8_t b : f.md5)
         oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
@@ -2524,8 +2584,12 @@ public:
       p += len;
       break;
     }
-    case 0x1d:
-    case 0x1f: { // DW_FORM_strp_sup
+    case 0x1f: {
+      result.value = *reinterpret_cast<const uint32_t *>(p);
+      p += 4;
+      break;
+    }
+    case 0x1d: { // DW_FORM_strp_sup
       result.value = *reinterpret_cast<const uint32_t *>(p);
       result.str = std::to_string(result.value);
       p += 4;
@@ -2542,7 +2606,6 @@ public:
       else
         llvm::errs() << "DW_FORM_implicit_const missing value at DIE offset 0x"
                      << intToHex(dieOffset, 8) << "\n";
-      break;
       break;
     }
     case 0x22:
@@ -3130,6 +3193,408 @@ public:
   }
 };
 
+class DebugArangeSection final : public Section {
+private:
+  struct ArangeEntry {
+    uint64_t address;
+    uint64_t length;
+  };
+
+  struct ArangeSet {
+    uint32_t unit_length;
+    uint16_t version;
+    uint32_t debug_info_offset;
+    uint8_t address_size;
+    uint8_t segment_size;
+    std::vector<ArangeEntry> ranges;
+  };
+
+  std::vector<ArangeSet> aranges;
+
+public:
+  DebugArangeSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+      : Section(SectionType::DebugAranges, shdr, _data) {
+    const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
+    const uint8_t *end = start + sh_size;
+
+    while (start < end) {
+      ArangeSet set{};
+
+      if (end - start < 4) break;
+      set.unit_length = *reinterpret_cast<const uint32_t *>(start);
+      start += 4;
+      if (set.unit_length == 0) break; // 结束
+      const uint8_t *set_end = start + set.unit_length;
+
+      if (end - start < 2) break;
+      set.version = *reinterpret_cast<const uint16_t *>(start);
+      start += 2;
+
+      if (end - start < 4) break;
+      set.debug_info_offset = *reinterpret_cast<const uint32_t *>(start);
+      start += 4;
+
+      set.address_size = *start++;
+      set.segment_size = *start++;
+
+      // 对齐到 2*address_size 边界
+      size_t header_size =
+          4 + 2 + 4 + 1 + 1; // unit_length+version+debug_info_offset+addr_size+seg_size
+      size_t padding = (2 * set.address_size) -
+                       (header_size % (2 * set.address_size));
+      if (padding != 2 * set.address_size) {
+        start += padding;
+      }
+
+      // 解析地址范围 entries
+      while (start < set_end) {
+        uint64_t addr = 0, length = 0;
+
+        if (set.address_size == 4) {
+          addr = *reinterpret_cast<const uint32_t *>(start);
+          start += 4;
+          length = *reinterpret_cast<const uint32_t *>(start);
+          start += 4;
+        } else if (set.address_size == 8) {
+          addr = *reinterpret_cast<const uint64_t *>(start);
+          start += 8;
+          length = *reinterpret_cast<const uint64_t *>(start);
+          start += 8;
+        } else {
+          llvm::errs() << "Unsupported address_size in .debug_aranges";
+        }
+
+        if (addr == 0 && length == 0) break; // terminator
+        set.ranges.push_back({addr, length});
+      }
+
+      aranges.push_back(std::move(set));
+      start = set_end;
+    }
+  }
+
+  void writeDataTo(char *buffer) override {
+    std::vector<uint8_t> out;
+
+    for (const auto &set : aranges) {
+      // unit_length
+      size_t headerStart = out.size();
+      out.resize(out.size() + 4);
+      // version
+      out.insert(out.end(), reinterpret_cast<const uint8_t *>(&set.version),
+                 reinterpret_cast<const uint8_t *>(&set.version) + 2);
+
+      // debug_info_offset
+      out.insert(out.end(),
+                 reinterpret_cast<const uint8_t *>(&set.debug_info_offset),
+                 reinterpret_cast<const uint8_t *>(&set.debug_info_offset) + 4);
+
+      // addr_size, seg_size
+      out.push_back(set.address_size);
+      out.push_back(set.segment_size);
+
+      // 对齐填充
+      size_t header_size = 4 + 2 + 4 + 1 + 1;
+      size_t padding = (2 * set.address_size) -
+                       (header_size % (2 * set.address_size));
+      if (padding != 2 * set.address_size) {
+        out.insert(out.end(), padding, 0);
+      }
+
+      // ranges
+      for (const auto &r : set.ranges) {
+        if (set.address_size == 4) {
+          uint32_t a = static_cast<uint32_t>(r.address);
+          uint32_t l = static_cast<uint32_t>(r.length);
+          out.insert(out.end(), reinterpret_cast<uint8_t *>(&a),
+                     reinterpret_cast<uint8_t *>(&a) + 4);
+          out.insert(out.end(), reinterpret_cast<uint8_t *>(&l),
+                     reinterpret_cast<uint8_t *>(&l) + 4);
+        } else {
+          uint64_t a = r.address;
+          uint64_t l = r.length;
+          out.insert(out.end(), reinterpret_cast<uint8_t *>(&a),
+                     reinterpret_cast<uint8_t *>(&a) + 8);
+          out.insert(out.end(), reinterpret_cast<uint8_t *>(&l),
+                     reinterpret_cast<uint8_t *>(&l) + 8);
+        }
+      }
+
+      // terminator
+      for (int i = 0; i < set.address_size * 2; i++)
+        out.push_back(0);
+
+      uint32_t length = static_cast<uint32_t>(out.size() - headerStart - 4);
+      out[headerStart + 0] = (length & 0xff);
+      out[headerStart + 1] = (length >> 8) & 0xff;
+      out[headerStart + 2] = (length >> 16) & 0xff;
+      out[headerStart + 3] = (length >> 24) & 0xff;
+    }
+
+    assert(out.size() <= sh_size &&
+           "Rewritten .debug_aranges larger than original");
+    memcpy(buffer, out.data(), out.size());
+  }
+
+  void dumpData(std::ostream &oss) const override {
+    oss << ".debug_aranges contents:\n";
+    for (size_t i = 0; i < aranges.size(); i++) {
+      const auto &set = aranges[i];
+      oss << "Arange Range Header:";
+      oss << " length = " << set.unit_length << ", format = DWARF32";
+      oss << ", version = 0x" << intToHex(set.version, 4);
+      oss << ", cu_offset = 0x" << intToHex(set.debug_info_offset, 8);
+      oss << ", addr_size = 0x" << intToHex(set.address_size, 2)
+          << ", seg_size = 0x" << intToHex(set.segment_size, 2) << "\n";
+      for (const auto &r : set.ranges) {
+        oss << "    [0x" << intToHex(r.address, set.address_size * 2)
+            << ", 0x" << intToHex(r.address + r.length, set.address_size * 2)
+            << ")\n";
+      }
+    }
+  }
+};
+
+class DebugLoclistsSection final : public Section {
+private:
+  struct Header {
+    uint32_t  length;
+    uint16_t  version;
+    uint8_t   addrSize;
+    uint8_t   segSize;
+    uint32_t   offsetEntryCount;
+  } header;
+
+  std::vector<uint64_t > offsets;
+
+  struct LocEntry {
+    uint64_t  offset;
+    uint8_t kind;
+    std::vector<uint64_t> values;
+    std::vector<uint8_t> expr;
+  };
+
+  std::vector<LocEntry> entries;
+
+public:
+  DebugLoclistsSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+      : Section(SectionType::DebugLoclists, shdr, _data) {
+    // TODO : parse .debug_loclists
+    const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
+    const uint8_t *end = start + sh_size;
+
+    header.length = llvm::support::endian::read32le(start);
+    start += 4;
+    header.version = llvm::support::endian::read16le(start);
+    start += 2;
+    header.addrSize = *start++;
+    header.segSize = *start++;
+    header.offsetEntryCount = llvm::support::endian::read32le(start);
+    start += 4;
+
+    for (uint32_t i = 0; i < header.offsetEntryCount; i++) {
+      uint32_t offset = llvm::support::endian::read32le(start);
+      start += 4;
+      offsets.push_back(offset);
+    }
+
+    unsigned n;
+    while (start < end)
+    {
+      uint64_t entryoff = start - reinterpret_cast<const uint8_t *>(data);
+      uint8_t kind = *start++;
+
+
+      LocEntry entry;
+      entry.offset = entryoff;
+      entry.kind = kind;
+      if (kind == 0) { // DW_LLE_end_of_list
+        entries.push_back(entry);
+        continue;
+      }
+      switch (kind) {
+      case 0x01 : {
+        uint64_t value = decodeULEB128(start, &n);
+        start += n;
+        entry.values.push_back(value);
+        break;
+      }
+      case 0x02:
+      case 0x03:
+      case 0x04: {
+        uint64_t value0 = decodeULEB128(start, &n);
+        start += n;
+        uint64_t value1 = decodeULEB128(start, &n);
+        start += n;
+        entry.values = {value0, value1};
+        break;
+      }
+      case 0x06: {
+        uint64_t addr = (header.addrSize == 8) ? llvm::support::endian::read64le(start) : llvm::support::endian::read32le(start);
+        start += header.addrSize;
+        entry.values.push_back(addr);
+        break;
+      }
+      case 0x07: {
+        uint64_t addrStart = (header.addrSize == 8) ? llvm::support::endian::read64le(start) : llvm::support::endian::read32le(start);
+        start += header.addrSize;
+        uint64_t addrEnd = (header.addrSize == 8) ? llvm::support::endian::read64le(start) : llvm::support::endian::read32le(start);
+        start += header.addrSize;
+        entry.values = {addrStart, addrEnd};
+        break;
+      }
+      case 0x08: {
+        uint64_t addr = (header.addrSize == 8) ? llvm::support::endian::read64le(start) : llvm::support::endian::read32le(start);
+        start += header.addrSize;
+        uint64_t length = decodeULEB128(start, &n);
+        start += n;
+        entry.values = {addr, length};
+        break;
+      }
+      default: {
+        assert(false && "Unhandled loclist entry kind");
+        break;
+      }
+      }
+
+      if (kind != 0x01 && kind != 0x06) {
+        uint64_t exprLength = decodeULEB128(start, &n);
+        start += n;
+        entry.expr.insert(entry.expr.end(), start, start + exprLength);
+        start += exprLength;
+      }
+      entries.push_back(std::move(entry));
+    }
+  }
+
+  void writeDataTo(char *buffer) override {
+    std::vector<uint8_t> out;
+
+    uint32_t len = (uint32_t)header.length;
+    out.push_back(len & 0xff);
+    out.push_back((len >> 8) & 0xff);
+    out.push_back((len >> 16) & 0xff);
+    out.push_back((len >> 24) & 0xff);
+
+    out.push_back(header.version & 0xff);
+    out.push_back((header.version >> 8) & 0xff);
+
+    out.push_back(header.addrSize);
+    out.push_back(header.segSize);
+
+    uint32_t oc = header.offsetEntryCount;
+    out.push_back(oc & 0xff);
+    out.push_back((oc >> 8) & 0xff);
+    out.push_back((oc >> 16) & 0xff);
+    out.push_back((oc >> 24) & 0xff);
+
+    for (auto off : offsets) {
+      uint32_t val = (uint32_t)off;
+      out.push_back(val & 0xff);
+      out.push_back((val >> 8) & 0xff);
+      out.push_back((val >> 16) & 0xff);
+      out.push_back((val >> 24) & 0xff);
+    }
+
+    for (auto &e : entries) {
+      out.push_back(e.kind);
+
+      switch (e.kind) {
+      case 0x01:
+        encodeULEB128(e.values[0], out);
+        break;
+      case 0x02:
+      case 0x03:
+      case 0x04:
+        encodeULEB128(e.values[0], out);
+        encodeULEB128(e.values[1], out);
+        break;
+      case 0x06: {
+        uint64_t v = e.values[0];
+        for (int i = 0; i < header.addrSize; i++)
+          out.push_back((v >> (i * 8)) & 0xff);
+        break;
+      }
+      case 0x07: {
+        uint64_t v1 = e.values[0];
+        uint64_t v2 = e.values[1];
+        for (int i = 0; i < header.addrSize; i++)
+          out.push_back((v1 >> (i * 8)) & 0xff);
+        for (int i = 0; i < header.addrSize; i++)
+          out.push_back((v2 >> (i * 8)) & 0xff);
+        break;
+      }
+      case 0x08: { // start_length
+        uint64_t v1 = e.values[0];
+        for (int i = 0; i < header.addrSize; i++)
+          out.push_back((v1 >> (i * 8)) & 0xff);
+        encodeULEB128(e.values[1], out);
+        break;
+      }
+      default:
+        break;
+      }
+      if (!e.expr.empty()) {
+        encodeULEB128(e.expr.size(), out);  // 先写长度
+        out.insert(out.end(), e.expr.begin(), e.expr.end());
+      }
+    }
+
+    assert(out.size() <= sh_size &&
+           "Rewritten .debug_aranges larger than original");
+    memcpy(buffer, out.data(), out.size());
+  }
+
+  void dumpData(std::ostream &oss) const override {
+    oss << ".debug_loclists contents:\n";
+    oss << "locations list header: length = 0x"
+        << intToHex(header.length, 8)
+        << ", format = DWARF32"
+        << ", version = 0x" << intToHex(header.version, 4)
+        << ", addr_size = 0x" << intToHex(header.addrSize, 2)
+        << ", seg_size = 0x" << intToHex(header.segSize, 2)
+        << ", offset_entry_count = 0x" << intToHex(header.offsetEntryCount, 8)
+        << "\n";
+
+    oss << "offsets: [\n";
+    for (auto off : offsets)
+      oss << "0x" << intToHex(off, 8) << "\n";
+    oss << "]\n";
+
+    for (auto &e : entries) {
+      if (e.kind == 0x00) continue;
+      if (e.kind == 0x01 || e.kind == 0x06)
+      oss << "0x" << intToHex(e.offset, 8) << ": \n";
+      oss << "            " << getLLEName(e.kind) << "(0x";
+      switch (e.kind) {
+        case 0x01:
+        case 0x06:
+          oss << intToHex(e.values[0], 16) << ")";
+          break;
+        case 0x02:
+        case 0x03:
+        case 0x04:
+        case 0x07:
+          oss << intToHex(e.values[0], 16) << ", 0x"
+          << intToHex(e.values[1], 16) << ")";
+          break;
+        case 0x08:
+          oss << intToHex(e.values[0], 16) << ", len="
+              << e.values[1] << ")";
+          break;
+        default:
+          break;
+      }
+      if (!e.expr.empty()) {
+        oss << ":";
+        for (auto op : e.expr)
+        oss << " 0x" << intToHex(op, 1);
+      }
+      oss << "\n";
+
+    }
+  }
+};
 
 
 // TODO .debug_rnglists, 7.28, clang, lld version 17.0.6

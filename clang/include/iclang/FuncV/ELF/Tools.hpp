@@ -274,6 +274,21 @@ inline std::string getFormName(uint64_t form) {
   }
 }
 
+inline  std::string  getLLEName(uint8_t kind){
+  switch (kind) {
+  case 0x00: return "DW_LLE_end_of_list";
+  case 0x01: return "DW_LLE_base_addressx";
+  case 0x02: return "DW_LLE_startx_endx";
+  case 0x03: return "DW_LLE_startx_length";
+  case 0x04: return "DW_LLE_offset_pair";
+  case 0x05: return "DW_LLE_default_location";
+  case 0x06: return "DW_LLE_base_address";
+  case 0x07: return "DW_LLE_start_end";
+  case 0x08: return "DW_LLE_start_length";
+  default: return "DW_UT_<unknown>";
+  }
+}
+
 static std::string opcodeName(uint8_t opcode) {
   switch (opcode) {
   case 1:

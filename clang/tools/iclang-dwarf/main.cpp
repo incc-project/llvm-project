@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   objFile.init();
 
   std::ostringstream oss;
-//  objFile.dump(oss);
+  objFile.dump(oss);
   llvm::errs() << oss.str() << "\n";
 
   objFile.fini();

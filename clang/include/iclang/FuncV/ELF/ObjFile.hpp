@@ -61,6 +61,7 @@ private:
 
   std::shared_ptr<DebugAbbrevSection> debugAbbrev;
   std::shared_ptr<DebugStrSection> debugStr;
+  std::shared_ptr<DebugLineStrSection> debugLineStr;
   std::shared_ptr<DebugInfoSection> debugInfoSection;
   std::shared_ptr<DebugStrOffsetsSection> debugStrOff;
   std::shared_ptr<DebugAddrSection> debugAddr;
@@ -246,6 +247,12 @@ private:
         continue;
       }
 
+      if (secNameStr == ".debug_line_str") {
+        debugLineStr = std::make_shared<DebugLineStrSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        sections[i] = debugLineStr;
+        continue;
+      }
+
       if (secNameStr == ".rela.debug_str_offsets") {
         relaDebugStrOffsets = std::static_pointer_cast<RelocationSection>(
             sections[i] = std::make_shared<RelocationSection>(shdrs[i], object + shdrs[i]->sh_offset));
@@ -274,6 +281,16 @@ private:
         debugRnglistShdr = shdrs[i];
         debugRnglistData = object + shdrs[i]->sh_offset;
         debugRnglistIndex = i;
+        continue;
+      }
+
+      if (secNameStr == ".debug_loclists") {
+        sections[i] = std::make_shared<DebugLoclistsSection>(shdrs[i], object + shdrs[i]->sh_offset);
+        continue;
+      }
+
+      if (secNameStr == ".debug_aranges") {
+        sections[i] = std::make_shared<DebugArangeSection>(shdrs[i], object + shdrs[i]->sh_offset);
         continue;
       }
 
