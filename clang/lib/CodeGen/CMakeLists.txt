@@ -171,4 +171,10 @@ add_clang_library(clangCodeGen
   clangFrontend
   clangLex
   clangSerialization
+  # IClang begin
+  iClangSupport
+  iClangASTSupport
+  iClangCC1Driver
+  ILLVMSupport
+  # IClang end
   )

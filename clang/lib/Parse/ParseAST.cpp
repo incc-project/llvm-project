@@ -26,6 +26,11 @@
 #include <cstdio>
 #include <memory>
 
+// IClang begin
+#include "iclang/Support/Global.h"
+#include "iclang/ASTSupport/ASTGlobal.h"
+// IClang end
+
 using namespace clang;
 
 namespace {
@@ -144,6 +149,14 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   ExternalASTSource *External = S.getASTContext().getExternalSource();
   if (External)
     External->StartTranslationUnit(Consumer);
+
+  // IClang begin
+  const auto &global = iclang::Global::getInstance();
+  auto &astGlobal = iclang::ASTGlobal::getInstance();
+  if (global.isEnabled()) {
+    astGlobal.setContext(&S.getASTContext());
+  }
+  // IClang end
 
   // If a PCH through header is specified that does not have an include in
   // the source, or a PCH is being created with #pragma hdrstop with nothing

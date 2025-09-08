@@ -1,0 +1,33 @@
+add_llvm_component_library(ILLVMFuncVELF
+  BDG.cpp
+  EhFrame.cpp
+  EHFrameSection.cpp
+  FuncV.cpp
+  GroupSection.cpp
+  ObjFile.cpp
+  Reference.cpp
+  Relocation.cpp
+  RelocationSection.cpp
+  Reuse.cpp
+  ReuseEhFrame.cpp
+  ReuseNode.cpp
+  ReuseRelocation.cpp
+  ReuseSection.cpp
+  ReuseSymbol.cpp
+  Section.cpp
+  StringTableSection.cpp
+  Symbol.cpp
+  SymbolTableSection.cpp
+  Type.cpp
+
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/illvm/FuncV/ELF
+
+  LINK_COMPONENTS
+  Support
+  ILLVMSupport
+  BinaryFormat
+
+  DEPENDS
+  intrinsics_gen
+  )

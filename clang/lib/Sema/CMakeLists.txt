@@ -115,4 +115,10 @@ add_clang_library(clangSema
   clangEdit
   clangLex
   clangSupport
+  # IClang begin
+  iClangSupport
+  iClangASTSupport
+  iClangCC1Driver
+  ILLVMSupport
+  # IClang end
   )

@@ -32,3 +32,7 @@ add_subdirectory(Support)
 if(CLANG_ENABLE_CIR)
   add_subdirectory(CIR)
 endif()
+
+# IClang begin
+add_subdirectory(IClang)
+# IClang end

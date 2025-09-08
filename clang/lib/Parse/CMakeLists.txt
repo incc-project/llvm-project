@@ -36,4 +36,9 @@ add_clang_library(clangParse
   DEPENDS
   omp_gen
   ClangDriverOptions
+  # IClang begin
+  iClangSupport
+  iClangASTSupport
+  ILLVMSupport
+  # IClang end
   )

@@ -52,6 +52,15 @@
 #include "llvm/Transforms/IPO/Internalize.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
+// IClang begin
+#include "iclang/ASTSupport/ASTGlobal.h"
+#include "iclang/CC1Driver/IncCC1Driver.h"
+#include "iclang/Support/Global.h"
+#include "illvm/Support/Time.h"
+// IClang end
+
+#include "iclang/CC1Driver/ShareCC1Driver.h"
+
 #include <optional>
 using namespace clang;
 using namespace llvm;
@@ -245,6 +254,20 @@ void BackendConsumer::HandleTranslationUnit(ASTContext &C) {
 
     IRGenFinished = true;
   }
+
+  // IClang begin
+  const auto &global = iclang::Global::getInstance();
+  if (global.isEnabled()) {
+    const auto metaData = global.getMetaData();
+    metaData->midTs = illvm::Time::currentTsMs();
+    metaData->frontTimeMs = metaData->midTs - metaData->startTs;
+
+    const auto shareTestMetaData = global.getShareTestMetaData();
+    if (shareTestMetaData != nullptr) {
+      iclang::ShareTestCC1Driver::run();
+    }
+  }
+  // IClang end
 
   // Silently ignore if we weren't initialized for some reason.
   if (!getModule())

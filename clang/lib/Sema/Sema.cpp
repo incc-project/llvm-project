@@ -77,6 +77,12 @@
 #include "llvm/Support/TimeProfiler.h"
 #include <optional>
 
+// IClang begin
+#include "iclang/ASTSupport/ASTGlobal.h"
+#include "iclang/CC1Driver/IncCC1Driver.h"
+#include "iclang/Support/Global.h"
+// IClang end
+
 using namespace clang;
 using namespace sema;
 
@@ -1048,7 +1054,14 @@ static void checkUndefinedButUsed(Sema &S) {
       assert(FD->getMostRecentDecl()->isInlined() &&
              "used object requires definition but isn't inline or internal?");
       // FIXME: This is ill-formed; we should reject.
-      S.Diag(VD->getLocation(), diag::warn_undefined_inline) << VD;
+      // IClang Begin
+      const auto &global = iclang::Global::getInstance();
+      auto &astGlobal = iclang::ASTGlobal::getInstance();
+      if (!global.isEnabled() || !astGlobal.isDisableWarningDecl(FD)) {
+        // FIXME: This is ill-formed; we should reject.
+        S.Diag(VD->getLocation(), diag::warn_undefined_inline) << VD;
+      }
+      // IClang End
     } else {
       assert(cast<VarDecl>(VD)->getMostRecentDecl()->isInline() &&
              "used var requires definition but isn't inline or internal?");
@@ -1220,6 +1233,20 @@ void Sema::ActOnEndOfTranslationUnitFragment(TUFragmentKind Kind) {
   {
     llvm::TimeTraceScope TimeScope("PerformPendingInstantiations");
     PerformPendingInstantiations();
+
+    // IClang begin
+    const auto &global = iclang::Global::getInstance();
+    if (global.isEnabled()) {
+      auto iClangMode = global.getConfig().getIClangMode();
+      if (iClangMode == iclang::IClangMode::IncMode) {
+        iclang::IncCC1Driver::run(this);
+      } else if (iClangMode == iclang::IClangMode::IncTestMode) {
+        iclang::IncTestCC1Driver::run(this);
+      }
+    } else {
+      PerformPendingInstantiations();
+    }
+    // IClang end
   }
 
   emitDeferredDiags();

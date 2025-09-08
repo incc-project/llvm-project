@@ -9385,3 +9385,10 @@ def wasm_opt : Flag<["--"], "wasm-opt">,
   Group<m_Group>,
   HelpText<"Enable the wasm-opt optimizer (default)">,
   MarshallingInfoNegativeFlag<LangOpts<"NoWasmOpt">>;
+
+// IClang begin
+def iclang : Joined<["-"], "iclang">,
+    HelpText<"Enable IClang with the provided config file">,
+    Flags<[NoArgumentUnused]>,
+    Visibility<[ClangOption, CC1Option]>;
+// IClang end

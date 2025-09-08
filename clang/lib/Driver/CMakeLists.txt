@@ -100,5 +100,10 @@ add_clang_library(clangDriver
 
   LINK_LIBS
   clangBasic
+  # IClang begin
+  iClangDriver
+  ILLVMSupport
+  ILLVMFuncVELF
+  # IClang end
   ${system_libs}
   )
