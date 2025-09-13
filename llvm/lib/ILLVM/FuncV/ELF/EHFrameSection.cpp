@@ -260,12 +260,6 @@ void EhFrameSection::dumpData(std::ostream &oss) const {
   }
 }
 
-std::string EhFrameSection::dataToString() const {
-  std::stringstream oss;
-  dumpData(oss);
-  return oss.str();
-}
-
 } // namespace elf
 } // namespace funcv
 } // namespace illvm

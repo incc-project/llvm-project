@@ -38,8 +38,6 @@ public:
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
-
-  std::string dataToString() const override;
 };
 
 class SymbolTableSection final : public Section {
@@ -68,8 +66,6 @@ public:
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
-
-  std::string dataToString() const override;
 
   size_t getSize() const { return symbols.size(); }
 

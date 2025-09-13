@@ -142,26 +142,30 @@ void DebugRnglistSection::dumpData(std::ostream &oss) const {
       switch (entry.kind) {
       case 0x01: {
         assert(debugAddr != nullptr);
-        uint64_t baseAddr =
-            debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
+        // uint64_t baseAddr =
+        //     debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
+        uint64_t baseAddr = 0;
         oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
             << baseAddr << ")\n";
         break;
       }
       case 0x02: {
         assert(debugAddr != nullptr);
-        uint64_t startAddr =
-            debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
-        uint64_t endAddr =
-            debugAddr->getAddressByIndex(cuBaseOffset, entry.value1);
+        // uint64_t startAddr =
+        //     debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
+        // uint64_t endAddr =
+        //     debugAddr->getAddressByIndex(cuBaseOffset, entry.value1);
+        uint64_t startAddr = 0;
+        uint64_t endAddr = 0;
         oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
             << startAddr << ", 0x" << std::setw(16) << endAddr << ")\n";
         break;
       }
       case 0x03: {
         assert(debugAddr != nullptr);
-        uint64_t startAddr =
-            debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
+        // uint64_t startAddr =
+        //     debugAddr->getAddressByIndex(cuBaseOffset, entry.value0);
+        uint64_t startAddr = 0;
         oss << "[0x" << std::hex << std::setw(16) << std::setfill('0')
             << startAddr << ", 0x" << std::setw(16) << entry.value1 << ")\n";
         break;

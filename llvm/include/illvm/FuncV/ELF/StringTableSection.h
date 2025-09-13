@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "illvm/FuncV/ELF/Section.h"
 
@@ -28,7 +29,7 @@ class StringTableSection final : public Section {
 private:
   // offset -> strRef.
   // It can only work during parsing.
-  std::map<uint64_t, std::shared_ptr<StrRef>> originalIndexes;
+  std::unordered_map<uint64_t, std::shared_ptr<StrRef>> originalIndexes;
   // The first string should be "".
   std::vector<std::shared_ptr<StrRef>> strs;
 
@@ -43,8 +44,6 @@ public:
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
-
-  std::string dataToString() const override;
 
   // Add an existed str ref to strtab.
   void push_back(const std::shared_ptr<StrRef> &str) { strs.push_back(str); }

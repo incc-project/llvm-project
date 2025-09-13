@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "illvm/Support/Logger.h"
+
 namespace illvm {
 namespace funcv {
 namespace elf {
@@ -16,125 +18,111 @@ namespace elf {
 DebugAbbrevSection::DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
                                        const char *_data)
     : Section(SectionType::DebugAbbrev, shdr, _data) {
+  const auto &logger = Logger::getInstance();
+
   // Ref: 7.5.3
   const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *end = start + sh_size;
   const uint8_t *p = start;
 
+  const AbbreviationDecl zeroAbbrevDecl;
+  unsigned len;
+
+  // Padding 0.
+  abbrevTable.push_back(zeroAbbrevDecl);
+
   while (p < end) {
-    uint64_t abbrevOffset = p - start;
-    std::map<uint64_t, AbbreviationDecl> declMap;
+    AbbreviationDecl decl;
 
-    while (p < end) {
-      unsigned bytesRead;
-      uint64_t code = DebugConvert::decodeULEB128(p, &bytesRead, end);
-      p += bytesRead;
-      if (code == 0)
-        break;
+    decl.code = DebugConvert::decodeULEB128(p, &len, end);
+    p += len;
 
-      uint64_t tag = DebugConvert::decodeULEB128(p, &bytesRead, end);
-      p += bytesRead;
-      uint8_t hasChildrenByte = *p++;
-
-      AbbreviationDecl decl;
-      decl.code = code;
-      decl.tag = tag;
-      decl.hasChildren = (hasChildrenByte == 1); // DW_CHILDREN_yes
-
-      while (p < end) {
-        uint64_t attr = DebugConvert::decodeULEB128(p, &bytesRead, end);
-        p += bytesRead;
-        uint64_t form = DebugConvert::decodeULEB128(p, &bytesRead, end);
-        p += bytesRead;
-        if (attr == 0 && form == 0)
-          break;
-
-        AttributeForm af = {attr, form};
-        if (form == 0x21 /* DW_FORM_implicit_const */) {
-          af.implicitConst = DebugConvert::decodeSLEB128(p, &bytesRead, end);
-          p += bytesRead;
-        }
-
-        decl.attrForms.push_back(af);
-      }
-
-      declMap[code] = std::move(decl);
+    if (decl.code == 0) {
+      break;
     }
 
-    if (!declMap.empty())
-      abbrevTables[abbrevOffset] = std::move(declMap);
+    decl.tag = DebugConvert::decodeULEB128(p, &len, end);
+    p += len;
+
+    memcpy(&decl.hasChildren, p, sizeof(uint8_t));
+    p += sizeof(uint8_t);
+
+    while (p < end) {
+      const uint64_t attr = DebugConvert::decodeULEB128(p, &len, end);
+      p += len;
+      const uint64_t form = DebugConvert::decodeULEB128(p, &len, end);
+      p += len;
+      if (attr == 0 && form == 0) {
+        break;
+      }
+
+      AttributeForm af = {attr, form};
+      if (form == 0x21 /* DW_FORM_implicit_const */) {
+        // TODO. enum form type.
+        af.implicitConst = DebugConvert::decodeSLEB128(p, &len, end);
+        p += len;
+      }
+
+      decl.attrForms.push_back(af);
+    }
+
+    logger.assertTrue(abbrevTable.size() == decl.code,
+                      "abbrevTable.size() != decl.code");
+
+    abbrevTable.push_back(decl);
   }
 }
 
 void DebugAbbrevSection::dumpData(std::ostream &oss) const {
   oss << ".debug_abbrev contents:\n";
-  for (const auto &[offset, decls] : abbrevTables) {
-    oss << "Abbrev table for offset: 0x" << std::setw(8) << std::setfill('0')
-        << std::hex << offset << "\n";
-    for (const auto &[code, decl] : decls) {
-      oss << std::dec << code << ". " << DebugTypeToString::getTagName(decl.tag)
-          << "\t" << (decl.hasChildren ? "DW_CHILDREN_yes" : "DW_CHILDREN_no")
-          << "\n";
+  for (size_t i = 1; i < abbrevTable.size(); ++i) {
+    auto &decl = abbrevTable[i];
+    oss << std::dec << decl.code << ". "
+        << DebugTypeToString::getTagName(decl.tag) << "\t"
+        << (decl.hasChildren ? "DW_CHILDREN_yes" : "DW_CHILDREN_no") << "\n";
 
-      for (const auto &af : decl.attrForms) {
-        oss << "\t" << DebugTypeToString::getAttrName(af.attr) << "\t"
-            << DebugTypeToString::getFormName(af.form);
-        if (af.form == 0x21 && af.implicitConst.has_value()) {
-          oss << " " << af.implicitConst.value();
-        }
-        oss << "\n";
+    for (const auto &af : decl.attrForms) {
+      oss << "\t" << DebugTypeToString::getAttrName(af.attr) << "\t"
+          << DebugTypeToString::getFormName(af.form);
+      if (af.form == 0x21) {
+        oss << " " << af.implicitConst;
       }
       oss << "\n";
     }
+    oss << "\n";
   }
 }
 
 void DebugAbbrevSection::writeDataTo(char *buffer) {
-  std::vector<uint8_t> out;
+  auto out = reinterpret_cast<uint8_t *>(buffer);
 
-  for (const auto &[offset, decls] : abbrevTables) {
-    (void)offset;
+  for (size_t i = 1; i < abbrevTable.size(); ++i) {
+    auto &decl = abbrevTable[i];
+    out += DebugConvert::encodeULEB128(decl.code, out);
+    out += DebugConvert::encodeULEB128(decl.tag, out);
+    memcpy(out, &decl.hasChildren, sizeof(uint8_t));
+    out += sizeof(uint8_t);
 
-    for (const auto &[code, decl] : decls) {
-      DebugConvert::encodeULEB128(code, out);
-      DebugConvert::encodeULEB128(decl.tag, out);
-      out.push_back(decl.hasChildren ? 1 : 0);
-
-      for (const auto &af : decl.attrForms) {
-        DebugConvert::encodeULEB128(af.attr, out);
-        DebugConvert::encodeULEB128(af.form, out);
-        if (af.form == 0x21 && af.implicitConst.has_value()) {
-          DebugConvert::encodeSLEB128(af.implicitConst.value(), out);
-        }
+    for (const auto &af : decl.attrForms) {
+      out += DebugConvert::encodeULEB128(af.attr, out);
+      out += DebugConvert::encodeULEB128(af.form, out);
+      if (af.form == 0x21) {
+        out += DebugConvert::encodeSLEB128(af.implicitConst, out);
       }
-
-      // Write attribute-form terminator (0, 0)
-      DebugConvert::encodeULEB128(0, out);
-      DebugConvert::encodeULEB128(0, out);
     }
-    DebugConvert::encodeULEB128(0, out);
-  }
 
-  // Copy to target buffer
-  assert(out.size() <= sh_size &&
-         "Rewritten .debug_abbrev exceeds original section size");
-  memcpy(buffer, out.data(), out.size());
+    // Write attribute-form terminator (0, 0)
+    out += DebugConvert::encodeULEB128(0, out);
+    out += DebugConvert::encodeULEB128(0, out);
+  }
+  out += DebugConvert::encodeULEB128(0, out);
 }
 
 // Get abbreviation declaration by offset and code
-const DebugAbbrevSection::AbbreviationDecl *
-DebugAbbrevSection::getAbbreviationDecl(uint64_t abbrevOffset,
-                                        uint64_t code) const {
-  auto abbrevTableIt = abbrevTables.find(abbrevOffset);
-  if (abbrevTableIt == abbrevTables.end())
-    return nullptr;
-
-  const auto &decls = abbrevTableIt->second;
-  auto declIt = decls.find(code);
-  if (declIt == decls.end())
-    return nullptr;
-
-  return &declIt->second;
+const DebugAbbrevSection::AbbreviationDecl &
+DebugAbbrevSection::getAbbreviationDecl(const uint64_t code) const {
+  // TODO: check out-of-buffer
+  return abbrevTable[code];
 }
 
 } // namespace elf

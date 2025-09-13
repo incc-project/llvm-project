@@ -40,8 +40,6 @@ public:
 
   void dumpData(std::ostream &oss) const override;
 
-  std::string dataToString() const override;
-
   const auto &getRelocations() const { return relocations; }
 
   void push_back(const std::shared_ptr<Relocation> &relocation) {

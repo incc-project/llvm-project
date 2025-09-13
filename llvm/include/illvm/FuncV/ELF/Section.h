@@ -153,7 +153,7 @@ public:
 
   virtual void dumpData(std::ostream &oss) const;
 
-  virtual std::string dataToString() const;
+  std::string dataToString() const;
 };
 
 class OrdinarySection final : public Section {

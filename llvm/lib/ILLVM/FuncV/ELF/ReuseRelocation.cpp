@@ -1,5 +1,7 @@
 #include "illvm/FuncV/ELF/ReuseRelocation.h"
 
+#include "illvm/Support/Logger.h"
+
 namespace illvm {
 namespace funcv {
 namespace elf {
@@ -8,6 +10,7 @@ std::shared_ptr<Relocation> ReuseRelocation::createNewRelaEntry(
     const std::shared_ptr<Relocation> &oldRelaEntry,
     const std::unordered_map<std::string, std::weak_ptr<ReuseNode>>
         &dependencies) {
+  const auto &logger = Logger::getInstance();
   llvm::object::ELF64LE::Rela rela;
   rela.r_offset = 0;
   rela.r_info = oldRelaEntry->getRInfo();
@@ -24,10 +27,14 @@ std::shared_ptr<Relocation> ReuseRelocation::createNewRelaEntry(
   const auto oldSymbol = oldRelaEntry->getSym();
   const auto oldName = oldSymbol->getNameValue();
   const auto it = dependencies.find(oldName);
-  assert(it != dependencies.end());
+  logger.assertTrue(it != dependencies.end(),
+                    "ReuseRelocation::createNewRelaEntry: can not find old "
+                    "symbol in dependencies");
   const auto targetReuseNode = it->second;
   const auto targetSymbol = targetReuseNode.lock()->getNewSymbol();
-  assert(targetSymbol != nullptr);
+  logger.assertTrue(targetSymbol != nullptr,
+                    "ReuseRelocation::createNewRelaEntry: new target symbol "
+                    "should not be nullptr");
   newRelaEntry->setSym(targetSymbol);
 
   return newRelaEntry;
@@ -98,6 +105,7 @@ void ReuseRelocation::reuseCIERelaEntries(
 void ReuseRelocation::reuseFDERelaEntries(
     const std::shared_ptr<ReuseNode> &reuseNode, ObjFile &newObjFile,
     const std::shared_ptr<FDE> &newFDE, const std::shared_ptr<FDE> &oldFDE) {
+  const auto &logger = Logger::getInstance();
   // (1) Handle PCBegin.
   const auto oldPCBeginRelaEntry = oldFDE->getPCBeginRelaEntry();
   if (oldPCBeginRelaEntry != nullptr) {
@@ -115,7 +123,9 @@ void ReuseRelocation::reuseFDERelaEntries(
 
     // Update symbol.
     const auto targetSymbol = reuseNode->getNewSymbol();
-    assert(targetSymbol != nullptr);
+    logger.assertTrue(targetSymbol != nullptr,
+                      "ReuseRelocation::reuseFDERelaEntries: new target symbol "
+                      "should not be nullptr");
     newPCBeginRelaEntry->setSym(targetSymbol);
 
     newFDE->setPCBeginRelaEntry(newPCBeginRelaEntry);
@@ -135,6 +145,7 @@ void ReuseRelocation::reuseFDERelaEntries(
 }
 
 void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
+  const auto &logger = Logger::getInstance();
   const auto &funcVReuseNodes = bdg.getFuncVReuseNodes();
 
   // Reuse rela sections.
@@ -163,7 +174,9 @@ void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
     }
 
     const auto newSection = reuseNode->getNewSection();
-    assert(newSection != nullptr);
+    logger.assertTrue(
+        newSection != nullptr,
+        "ReuseRelocation::run: new section should not be nullptr");
     const auto newRelaSection =
         createNewRelaSection(reuseNode, newObjFile, newSection, oldRelaSection);
     reuseNode->setNewRelaSection(newRelaSection);

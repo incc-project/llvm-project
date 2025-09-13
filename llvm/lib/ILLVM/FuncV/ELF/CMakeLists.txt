@@ -13,6 +13,7 @@ add_llvm_component_library(ILLVMFuncVELF
   DebugStrSection.cpp
   EhFrame.cpp
   EHFrameSection.cpp
+  FormValue.cpp
   FuncV.cpp
   GroupSection.cpp
   ObjFile.cpp

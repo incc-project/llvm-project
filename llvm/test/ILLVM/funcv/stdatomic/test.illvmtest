@@ -1,0 +1,2 @@
+; REQUIRES: system-linux
+; RUN: %illvm-funcv-reuse-test

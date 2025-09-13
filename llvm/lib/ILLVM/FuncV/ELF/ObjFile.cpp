@@ -42,9 +42,7 @@ void ObjFile::parseHeader() {
   e_shstrndx = ehdr->e_shstrndx;
 
   // We do not support 32bit architecture.
-  if (!getIsRela(e_machine)) {
-    logger.fatal("We do not support rel");
-  }
+  logger.assertTrue(getIsRela(e_machine), "We do not support rel");
 }
 
 void ObjFile::parseStrSymTable(
@@ -62,17 +60,14 @@ void ObjFile::parseStrSymTable(
           shdrs[i], object + shdrs[i]->sh_offset);
       break;
     case llvm::ELF::SHT_SYMTAB:
-      if (symTab != nullptr) {
-        logger.fatal("multiple symbol tables");
-      }
+      logger.assertTrue(symTab == nullptr, "multiple symbol tables");
       symTab = std::make_shared<SymbolTableSection>(
           shdrs[i], object + shdrs[i]->sh_offset);
       sections[i] = symTab;
       break;
     case llvm::ELF::SHT_SYMTAB_SHNDX:
-      if (symTabShndx != nullptr) {
-        logger.fatal("multiple symtab shndx sections");
-      }
+      logger.assertTrue(symTabShndx == nullptr,
+                        "multiple symtab shndx sections");
       symTabShndx = std::make_shared<SymtabShndxSection>(
           shdrs[i], object + shdrs[i]->sh_offset);
       sections[i] = symTabShndx;
@@ -81,40 +76,36 @@ void ObjFile::parseStrSymTable(
       break;
     }
   }
-  if (symTab == nullptr) {
-    logger.fatal("missing symbol table");
-  }
+  logger.assertTrue(symTab != nullptr, "missing symbol table");
   symTab->setSymtabShndx(symTabShndx);
   shstrTab = std::static_pointer_cast<StringTableSection>(sections[e_shstrndx]);
-  if (shstrTab->getType() != SectionType::StrTab) {
-    logger.fatal("invalid shstrtab");
-  }
+  logger.assertTrue(shstrTab->getType() == SectionType::StrTab,
+                    "invalid shstrtab");
   strTab = std::static_pointer_cast<StringTableSection>(
       sections[symTab->getShLink()]);
-  if (strTab->getType() != SectionType::StrTab) {
-    logger.fatal("invalid strtab");
-  }
+  logger.assertTrue(strTab->getType() == SectionType::StrTab, "invalid strtab");
 }
 
 void ObjFile::parseOtherSections(
     const char *object,
     const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs) {
+  auto &logger = Logger::getInstance();
 
-  const llvm::object::ELF64LE::Shdr *debugInfoShdr = nullptr;
-  const char *debugInfoData = nullptr;
-  size_t debugInfoIndex = -1;
-
-  const llvm::object::ELF64LE::Shdr *debugStrOffShdr = nullptr;
-  const char *debugStrOffData = nullptr;
-  size_t debugStrOffIndex = -1;
-
-  const llvm::object::ELF64LE::Shdr *debugAddrShdr = nullptr;
-  const char *debugAddrData = nullptr;
-  size_t debugAddrIndex = -1;
-
-  const llvm::object::ELF64LE::Shdr *debugRnglistShdr = nullptr;
-  const char *debugRnglistData = nullptr;
-  size_t debugRnglistIndex = -1;
+  // const llvm::object::ELF64LE::Shdr *debugInfoShdr = nullptr;
+  // const char *debugInfoData = nullptr;
+  // size_t debugInfoIndex = -1;
+  //
+  // const llvm::object::ELF64LE::Shdr *debugStrOffShdr = nullptr;
+  // const char *debugStrOffData = nullptr;
+  // size_t debugStrOffIndex = -1;
+  //
+  // const llvm::object::ELF64LE::Shdr *debugAddrShdr = nullptr;
+  // const char *debugAddrData = nullptr;
+  // size_t debugAddrIndex = -1;
+  //
+  // const llvm::object::ELF64LE::Shdr *debugRnglistShdr = nullptr;
+  // const char *debugRnglistData = nullptr;
+  // size_t debugRnglistIndex = -1;
 
   for (size_t i = 0; i < sections.size(); i++) {
     const auto secName = shstrTab->parseOriginalIndex(shdrs[i]->sh_name);
@@ -127,87 +118,87 @@ void ObjFile::parseOtherSections(
       continue;
     }
 
-    if (secNameStr == ".debug_abbrev") {
-      debugAbbrev = std::make_shared<DebugAbbrevSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      sections[i] = debugAbbrev; // 保存进 sections 映射
-      continue;
-    }
-
-    if (secNameStr == ".debug_info") {
-      // 延迟构造 .debug_info，暂时记录必要信息
-      debugInfoShdr = shdrs[i];
-      debugInfoData = object + shdrs[i]->sh_offset;
-      debugInfoIndex = i;
-      continue;
-    }
-
-    if (secNameStr == ".debug_str_offsets") {
-      debugStrOffShdr = shdrs[i];
-      debugStrOffData = object + shdrs[i]->sh_offset;
-      debugStrOffIndex = i;
-      continue;
-    }
-
-    if (secNameStr == ".debug_str") {
-      debugStr = std::make_shared<DebugStrSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      sections[i] = debugStr;
-      continue;
-    }
-
-    if (secNameStr == ".debug_line_str") {
-      debugLineStr = std::make_shared<DebugLineStrSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      sections[i] = debugLineStr;
-      continue;
-    }
-
-    if (secNameStr == ".rela.debug_str_offsets") {
-      relaDebugStrOffsets = std::static_pointer_cast<RelocationSection>(
-          sections[i] = std::make_shared<RelocationSection>(
-              shdrs[i], object + shdrs[i]->sh_offset));
-      continue;
-    }
-
-    if (secNameStr == ".debug_addr") {
-      debugAddrShdr = shdrs[i];
-      debugAddrData = object + shdrs[i]->sh_offset;
-      debugAddrIndex = i;
-      continue;
-    }
-
-    if (secNameStr == ".rela.debug_addr") {
-      relaDebugAddr = std::static_pointer_cast<RelocationSection>(
-          sections[i] = std::make_shared<RelocationSection>(
-              shdrs[i], object + shdrs[i]->sh_offset));
-      continue;
-    }
-
-    if (secNameStr == ".debug_line") {
-      sections[i] = std::make_shared<DebugLineSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      continue;
-    }
-
-    if (secNameStr == ".debug_rnglists") {
-      debugRnglistShdr = shdrs[i];
-      debugRnglistData = object + shdrs[i]->sh_offset;
-      debugRnglistIndex = i;
-      continue;
-    }
-
-    if (secNameStr == ".debug_loclists") {
-      sections[i] = std::make_shared<DebugLoclistsSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      continue;
-    }
-
-    if (secNameStr == ".debug_aranges") {
-      sections[i] = std::make_shared<DebugArangeSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      continue;
-    }
+    // if (secNameStr == ".debug_abbrev") {
+    //   debugAbbrev = std::make_shared<DebugAbbrevSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   sections[i] = debugAbbrev; // 保存进 sections 映射
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_info") {
+    //   // 延迟构造 .debug_info，暂时记录必要信息
+    //   debugInfoShdr = shdrs[i];
+    //   debugInfoData = object + shdrs[i]->sh_offset;
+    //   debugInfoIndex = i;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_str_offsets") {
+    //   debugStrOffShdr = shdrs[i];
+    //   debugStrOffData = object + shdrs[i]->sh_offset;
+    //   debugStrOffIndex = i;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_str") {
+    //   debugStr = std::make_shared<DebugStrSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   sections[i] = debugStr;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_line_str") {
+    //   debugLineStr = std::make_shared<DebugLineStrSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   sections[i] = debugLineStr;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".rela.debug_str_offsets") {
+    //   relaDebugStrOffsets = std::static_pointer_cast<RelocationSection>(
+    //       sections[i] = std::make_shared<RelocationSection>(
+    //           shdrs[i], object + shdrs[i]->sh_offset));
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_addr") {
+    //   debugAddrShdr = shdrs[i];
+    //   debugAddrData = object + shdrs[i]->sh_offset;
+    //   debugAddrIndex = i;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".rela.debug_addr") {
+    //   relaDebugAddr = std::static_pointer_cast<RelocationSection>(
+    //       sections[i] = std::make_shared<RelocationSection>(
+    //           shdrs[i], object + shdrs[i]->sh_offset));
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_line") {
+    //   sections[i] = std::make_shared<DebugLineSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_rnglists") {
+    //   debugRnglistShdr = shdrs[i];
+    //   debugRnglistData = object + shdrs[i]->sh_offset;
+    //   debugRnglistIndex = i;
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_loclists") {
+    //   sections[i] = std::make_shared<DebugLoclistsSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   continue;
+    // }
+    //
+    // if (secNameStr == ".debug_aranges") {
+    //   sections[i] = std::make_shared<DebugArangeSection>(
+    //       shdrs[i], object + shdrs[i]->sh_offset);
+    //   continue;
+    // }
 
     switch (shdrs[i]->sh_type) {
     case llvm::ELF::SHT_STRTAB:
@@ -231,48 +222,49 @@ void ObjFile::parseOtherSections(
     }
   }
 
-  assert(ehFrame != nullptr && relaEhFrame != nullptr);
+  logger.assertTrue(ehFrame != nullptr && relaEhFrame != nullptr,
+                    "Missing eh_frame");
 
   // TODO Handle rela after 3.4.
-  if (debugStrOffShdr) {
-    assert(debugStr != nullptr);
-    debugStrOff = std::make_shared<DebugStrOffsetsSection>(
-        debugStrOffShdr, debugStrOffData, *debugStr);
-    sections[debugStrOffIndex] = debugStrOff;
-
-    if (relaDebugStrOffsets) {
-      debugStrOff->applyRelocations(relaDebugStrOffsets->getRelocations());
-    }
-  }
-
-  if (debugAddrShdr) {
-    debugAddr =
-        std::make_shared<DebugAddrSection>(debugAddrShdr, debugAddrData);
-    sections[debugAddrIndex] = debugAddr;
-
-    if (relaDebugAddr) {
-      debugAddr->applyRelocations(relaDebugAddr->getRelocations());
-    }
-  }
-
-  if (debugRnglistShdr) {
-    //      assert(debugAddr != nullptr);
-    debugRnglist = std::make_shared<DebugRnglistSection>(
-        debugRnglistShdr, debugRnglistData,
-        debugAddr ? debugAddr.get() : nullptr);
-    sections[debugRnglistIndex] = debugRnglist;
-  }
-
-  if (debugInfoShdr) {
-    assert(debugAbbrev != nullptr);
-    debugInfoSection = std::make_shared<DebugInfoSection>(
-        debugInfoShdr, debugInfoData, *debugAbbrev,
-        debugStr ? debugStr.get() : nullptr,
-        debugStrOff ? debugStrOff.get() : nullptr,
-        debugAddr ? debugAddr.get() : nullptr,
-        debugRnglist ? debugRnglist.get() : nullptr);
-    sections[debugInfoIndex] = debugInfoSection;
-  }
+  // if (debugStrOffShdr) {
+  //   logger.assertTrue(debugStr != nullptr, "Missing debug str");
+  //   debugStrOff = std::make_shared<DebugStrOffsetsSection>(
+  //       debugStrOffShdr, debugStrOffData, *debugStr);
+  //   sections[debugStrOffIndex] = debugStrOff;
+  //
+  //   if (relaDebugStrOffsets) {
+  //     debugStrOff->applyRelocations(relaDebugStrOffsets->getRelocations());
+  //   }
+  // }
+  //
+  // if (debugAddrShdr) {
+  //   debugAddr =
+  //       std::make_shared<DebugAddrSection>(debugAddrShdr, debugAddrData);
+  //   sections[debugAddrIndex] = debugAddr;
+  //
+  //   if (relaDebugAddr) {
+  //     debugAddr->applyRelocations(relaDebugAddr->getRelocations());
+  //   }
+  // }
+  //
+  // if (debugRnglistShdr) {
+  //   //      assert(debugAddr != nullptr);
+  //   debugRnglist = std::make_shared<DebugRnglistSection>(
+  //       debugRnglistShdr, debugRnglistData,
+  //       debugAddr ? debugAddr.get() : nullptr);
+  //   sections[debugRnglistIndex] = debugRnglist;
+  // }
+  //
+  // if (debugInfoShdr) {
+  //   logger.assertTrue(debugAbbrev != nullptr, "Missing debug abbrev");
+  //   debugInfoSection = std::make_shared<DebugInfoSection>(
+  //       debugInfoShdr, debugInfoData, *debugAbbrev,
+  //       debugStr ? debugStr.get() : nullptr,
+  //       debugStrOff ? debugStrOff.get() : nullptr,
+  //       debugAddr ? debugAddr.get() : nullptr,
+  //       debugRnglist ? debugRnglist.get() : nullptr);
+  //   sections[debugInfoIndex] = debugInfoSection;
+  // }
 }
 
 void ObjFile::parseReferences() {
@@ -331,9 +323,8 @@ void ObjFile::parseSections() {
   std::vector<const Elf_Shdr *> shdrs;
   shdrs.reserve(e_shnum);
 
-  if (e_shentsize != sizeof(Elf_Shdr)) {
-    logger.fatal("Invalid ELF file: e_shentsize != sizeof(Elf_Shdr)");
-  }
+  logger.assertTrue(e_shentsize == sizeof(Elf_Shdr),
+                    "Invalid ELF file: e_shentsize != sizeof(Elf_Shdr)");
 
   // 1. Parse shdrs.
   // 1.1. Add the first shdr.
@@ -406,9 +397,7 @@ std::size_t ObjFile::alignOffset(const std::uint64_t offset,
                                  const std::uint64_t sh_addralign) {
   const auto &logger = Logger::getInstance();
 
-  if (sh_addralign == 0) {
-    logger.fatal("sh_addralign cannot be zero.");
-  }
+  logger.assertTrue(sh_addralign != 0, "sh_addralign cannot be zero.");
   if (offset % sh_addralign == 0) {
     return offset;
   }

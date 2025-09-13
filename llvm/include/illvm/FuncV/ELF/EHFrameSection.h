@@ -47,8 +47,6 @@ public:
 
   void dumpData(std::ostream &oss) const override;
 
-  std::string dataToString() const override;
-
   void addCFI(const std::shared_ptr<CFI> &newCFI) { cfis.push_back(newCFI); }
 
   auto &getCFIs() const { return cfis; }

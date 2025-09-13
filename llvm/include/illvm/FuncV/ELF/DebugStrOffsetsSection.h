@@ -12,41 +12,45 @@ namespace elf {
 
 class DebugStrOffsetsSection final : public Section {
 private:
-  const DebugStrSection &debugStr;
+  using OffsetESType = uint32_t;
 
-  // TODO: block struct -> rela. Note: debug_info -> block ref.
   // Structure representing a string offsets table
-  struct StringOffsetsTable {
+  struct StringOffsetsHeader {
     uint32_t unitLength;
     uint16_t version;
     uint16_t padding; // always 0
   };
 
-  std::vector<StringOffsetsTable> tables;
-  std::vector<uint64_t> offsetBases;
-  std::vector<uint64_t> sizes;
-  std::vector<uint64_t> headerSizes;
-  std::vector<std::vector<uint32_t>> allOffsets;
+  StringOffsetsHeader header;
+  std::vector<std::shared_ptr<DebugStrOffsetRef>> offsets;
 
 public:
-  DebugStrOffsetsSection(const llvm::object::ELF64LE::Shdr *shdr,
-                         const char *_data, const DebugStrSection &strRef);
+  DebugStrOffsetsSection(
+      const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+      const std::shared_ptr<DebugStrSection> &debugStrSection);
 
-  // Apply relocations to string offsets
-  void applyRelocations(const std::vector<std::shared_ptr<Relocation>> &relocs);
+  std::shared_ptr<DebugStrOffsetRef> getStrOffsetRef(uint32_t idx);
+
+  void layout() override;
 
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
 
-  // Get table index by base offset
-  int getTableIndex(uint64_t baseOffset) const;
+  // Add an existed str offset ref to offsets.
+  void push_back(const std::shared_ptr<DebugStrOffsetRef> &strOffsetRef) {
+    offsets.push_back(strOffsetRef);
+  }
 
-  // Get string offset by table index and string index
-  uint32_t getStringOffset(int tableIndex, uint32_t strxIndex) const;
-
-  // Get string by table index and string index
-  std::string getStringFromStrx(int tableIndex, uint32_t strxIndex) const;
+  // Add a new str offset ref to offsets.
+  std::shared_ptr<DebugStrOffsetRef> push_back(const std::string &str) {
+    const auto idx = std::make_shared<IdxRef>(0);
+    const auto offset = std::make_shared<IdxRef>(0);
+    const auto strRef = std::make_shared<DebugStrRef>(offset, str);
+    const auto strOffRef = std::make_shared<DebugStrOffsetRef>(idx, strRef);
+    offsets.push_back(strOffRef);
+    return strOffRef;
+  }
 };
 
 } // namespace elf

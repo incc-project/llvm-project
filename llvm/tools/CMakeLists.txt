@@ -76,3 +76,7 @@ if (LLVM_TOOL_LLVM_DRIVER_BUILD)
   # llvm-driver was not created in that directory.
   generate_driver_tool_targets()
 endif()
+
+# ILLVM begin
+add_llvm_tool_subdirectory(illvm-funcv)
+# ILLVM end

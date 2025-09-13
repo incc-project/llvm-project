@@ -1,6 +1,9 @@
 #ifndef ILLVM_DEBUGSTRSECTION_H
 #define ILLVM_DEBUGSTRSECTION_H
 
+#include <unordered_map>
+#include <memory>
+
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/Section.h"
 
@@ -10,23 +13,34 @@ namespace elf {
 
 class DebugStrSection final : public Section {
 private:
-  // Structure representing a string entry in .debug_str section
-  struct StringEntry {
-    uint64_t offset; // Offset within the section
-    std::string str; // The string content
-  };
+  std::vector<std::shared_ptr<DebugStrRef>> strs; // List of string entries
 
-  std::vector<StringEntry> strings; // List of string entries
+  // offset -> strRef.
+  // It can only work during parsing.
+  std::unordered_map<uint64_t, std::shared_ptr<DebugStrRef>> originalIndexes;
 
 public:
-  // TODO fix: string overlap, according to debug str offset.
   DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+
+  // TODO: use this function!
+  std::shared_ptr<DebugStrRef> parseOriginalIndex(uint64_t strOff);
+
+  void layout() override;
 
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
 
-  std::string getString(uint32_t offset) const;
+  // Add an existed str ref to strtab.
+  void push_back(const std::shared_ptr<DebugStrRef> &strRef) { strs.push_back(strRef); }
+
+  // Add a new str to strtab.
+  std::shared_ptr<DebugStrRef> push_back(const std::string &str) {
+    const auto offset = std::make_shared<IdxRef>(0);
+    const auto strRef = std::make_shared<DebugStrRef>(offset, str);
+    strs.push_back(strRef);
+    return strRef;
+  }
 };
 
 } // namespace elf

@@ -62,12 +62,6 @@ void StringTableSection::dumpData(std::ostream &oss) const {
   }
 }
 
-std::string StringTableSection::dataToString() const {
-  std::stringstream oss;
-  dumpData(oss);
-  return oss.str();
-}
-
 } // namespace elf
 } // namespace funcv
 } // namespace illvm

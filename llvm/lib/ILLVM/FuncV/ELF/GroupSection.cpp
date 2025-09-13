@@ -14,13 +14,12 @@ GroupSection::GroupSection(const llvm::object::ELF64LE::Shdr *shdr,
     : Section(SectionType::Group, shdr, _data) {
   const auto &logger = Logger::getInstance();
 
-  if (shdr->sh_entsize != sizeof(uint32_t)) {
-    logger.fatal("Invalid group section: shdr->sh_entsize != sizeof(Elf_Rela)");
-  }
-  if (shdr->sh_size % shdr->sh_entsize != 0) {
-    logger.fatal(
-        "Invalid group section: shdr->sh_size % shdr->sh_entsize != 0");
-  }
+  logger.assertTrue(
+      shdr->sh_entsize == sizeof(uint32_t),
+      "Invalid group section: shdr->sh_entsize != sizeof(Elf_Rela)");
+  logger.assertTrue(
+      shdr->sh_size % shdr->sh_entsize == 0,
+      "Invalid group section: shdr->sh_size % shdr->sh_entsize != 0");
 }
 
 void GroupSection::parseReferences(
@@ -54,12 +53,6 @@ void GroupSection::dumpData(std::ostream &oss) const {
     oss << "section: " << sec->getIdxValue() << " " << sec->getNameValue()
         << std::endl;
   }
-}
-
-std::string GroupSection::dataToString() const {
-  std::stringstream oss;
-  dumpData(oss);
-  return oss.str();
 }
 
 } // namespace elf

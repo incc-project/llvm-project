@@ -14,12 +14,12 @@ RelocationSection::RelocationSection(const llvm::object::ELF64LE::Shdr *shdr,
     : Section(SectionType::RelaTab, shdr, _data) {
   const auto &logger = Logger::getInstance();
 
-  if (shdr->sh_entsize != sizeof(Elf_Rela)) {
-    logger.fatal("Invalid symbol table: shdr->sh_entsize != sizeof(Elf_Rela)");
-  }
-  if (shdr->sh_size % shdr->sh_entsize != 0) {
-    logger.fatal("Invalid symbol table: shdr->sh_size % shdr->sh_entsize != 0");
-  }
+  logger.assertTrue(
+      shdr->sh_entsize == sizeof(Elf_Rela),
+      "Invalid symbol table: shdr->sh_entsize != sizeof(Elf_Rela)");
+  logger.assertTrue(
+      shdr->sh_size % shdr->sh_entsize == 0,
+      "Invalid symbol table: shdr->sh_size % shdr->sh_entsize != 0");
 
   const size_t relocationNum = shdr->sh_size / shdr->sh_entsize;
   relocations.reserve(relocationNum);
@@ -76,12 +76,6 @@ void RelocationSection::dumpData(std::ostream &oss) const {
     relocation->dump(oss);
     oss << std::endl;
   }
-}
-
-std::string RelocationSection::dataToString() const {
-  std::stringstream oss;
-  dumpData(oss);
-  return oss.str();
 }
 
 } // namespace elf

@@ -3,6 +3,7 @@
 
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/Relocation.h"
+#include "illvm/FuncV/ELF/RelocationSection.h"
 #include "illvm/FuncV/ELF/Section.h"
 
 namespace illvm {
@@ -12,31 +13,46 @@ namespace elf {
 class DebugAddrSection final : public Section {
 private:
   // Structure representing an address table
-  struct AddrTable {
+  struct AddrTableHeader {
     uint32_t unitLength;
     uint16_t version; // DWARF version
     uint8_t addrSize; // Address size in bytes
     uint8_t segSize;  // Segment selector size
   };
 
-  std::vector<AddrTable> tables;     // List of address tables
-  std::vector<uint64_t> offsetBases; // 每个表的 offsetBase
-  std::vector<uint64_t> sizes;       // 每个表的 size（unitLength + 4）
-  std::vector<uint64_t> headerSizes; // 每个表头部长度
-  std::vector<std::vector<uint64_t>> allAddresses; // 每个表的地址列表
+  AddrTableHeader header;
+  std::vector<std::shared_ptr<DebugAddrRef>> addresses;
 
 public:
   DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
 
-  // Apply relocations to address entries
-  void applyRelocations(const std::vector<std::shared_ptr<Relocation>> &relocs);
+  // TODO call this function in ObjFile
+  void
+  parseReferences(const std::shared_ptr<RelocationSection> &relaSection) const;
 
-  // Get address by table base offset and index
-  uint64_t getAddressByIndex(uint64_t baseOffset, uint64_t index) const;
+  void layout() override;
 
   void writeDataTo(char *buffer) override;
 
   void dumpData(std::ostream &oss) const override;
+
+  std::shared_ptr<DebugAddrRef> getDebugAddrRef(const uint64_t idx) const {
+    return addresses[idx];
+  }
+
+  // Add an existed addr ref to addresses.
+  void push_back(const std::shared_ptr<DebugAddrRef> &addrRef) {
+    addresses.push_back(addrRef);
+  }
+
+  // Add a new addr ref to addresses.
+  std::shared_ptr<DebugAddrRef>
+  push_back(std::shared_ptr<Relocation> &relaEntry) {
+    const auto idx = std::make_shared<IdxRef>(0);
+    const auto addrRef = std::make_shared<DebugAddrRef>(idx, relaEntry);
+    addresses.push_back(addrRef);
+    return addrRef;
+  }
 };
 
 } // namespace elf

@@ -1,5 +1,7 @@
 #include "illvm/FuncV/ELF/ReuseSymbol.h"
 
+#include "illvm/Support/Logger.h"
+
 namespace illvm {
 namespace funcv {
 namespace elf {
@@ -18,7 +20,9 @@ void ReuseSymbol::replaceNewSymbol(const std::shared_ptr<Section> &newSection,
   const int specialShndx = oldSymbol->getSpecialShndx();
   newSymbol->setSpecialShndx(specialShndx);
   if (specialShndx == -1) {
-    assert(newSection != nullptr);
+    Logger::getInstance().assertTrue(
+        newSection != nullptr,
+        "ReuseSymbol::replaceNewSymbol: new Section should not be nullptr");
     newSymbol->setSecIdx(newSection->getIdx());
   }
 }
@@ -55,7 +59,9 @@ ReuseSymbol::createNewSymbol(ObjFile &newObjFile,
   const int specialShndx = oldSymbol->getSpecialShndx();
   newSymbol->setSpecialShndx(specialShndx);
   if (specialShndx == -1) {
-    assert(newSection != nullptr);
+    Logger::getInstance().assertTrue(
+        newSection != nullptr,
+        "ReuseSymbol::createNewSymbol: new Section should not be nullptr");
     newSymbol->setSecIdx(newSection->getIdx());
   }
 

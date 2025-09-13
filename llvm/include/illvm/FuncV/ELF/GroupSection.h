@@ -38,8 +38,6 @@ public:
 
   void dumpData(std::ostream &oss) const override;
 
-  std::string dataToString() const override;
-
   const auto &getSections() { return sections; }
 
   void push_back(const std::shared_ptr<Section> &section) {

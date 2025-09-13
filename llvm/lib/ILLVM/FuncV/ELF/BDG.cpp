@@ -4,6 +4,7 @@
 #include <queue>
 #include <sstream>
 
+#include "illvm/Support/Logger.h"
 #include "illvm/Support/Strings.h"
 
 namespace illvm {
@@ -281,6 +282,8 @@ void BDG::handleSymSecDep(const std::shared_ptr<ReuseNode> &reuseNode) {
 }
 
 void BDG::handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode) {
+  const auto &logger = Logger::getInstance();
+
   const auto oldRelaSection = reuseNode->getOldRelaSection();
   if (oldRelaSection == nullptr) {
     return;
@@ -289,7 +292,8 @@ void BDG::handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode) {
   const auto &relaEntries = oldRelaSection->getRelocations();
   for (const auto &relaEntry : relaEntries) {
     const auto symbol = relaEntry->getSym();
-    assert(symbol != nullptr);
+    logger.assertTrue(symbol != nullptr,
+                      "BDG::handleRelaDep symbol should not be nullptr");
 
     const auto name = symbol->getNameValue();
     const auto it = reuseNodeIdrMap.find(name);

@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "illvm/Support/Logger.h"
+
 namespace illvm {
 namespace funcv {
 namespace elf {
@@ -16,160 +18,108 @@ namespace elf {
 DebugAddrSection::DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr,
                                    const char *_data)
     : Section(SectionType::DebugAddr, shdr, _data) {
-  // Ref: 7.27
-  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data);
-  const uint8_t *end = ptr + shdr->sh_size;
+  // Ref 7.27
+  const auto &logger = Logger::getInstance();
 
-  while (ptr < end) {
-    const uint8_t *tableStart = ptr;
-    if (end - ptr < 8)
-      break; // Invalid header
+  // Read header.
+  logger.assertTrue(sizeof(AddrTableHeader) <= sh_size,
+                    "Can not read addr table header");
+  const auto *hdr = reinterpret_cast<const AddrTableHeader *>(data);
+  logger.assertTrue(hdr->unitLength == sh_size - sizeof(uint32_t),
+                    "Invalid addr table size");
+  header.unitLength = hdr->unitLength;
+  header.version = hdr->version;
+  header.addrSize = hdr->addrSize;
+  header.segSize = hdr->segSize;
 
-    const uint32_t unitLength = llvm::support::endian::read32le(ptr);
-    ptr += 4;
+  logger.assertTrue((sh_size - sizeof(AddrTableHeader)) % header.addrSize == 0,
+                    "DebugAddrSection: Invalid addresses");
 
-    const uint8_t *tableEnd = ptr + unitLength;
-    if (tableEnd > end)
-      break;
-    if (tableEnd - ptr < 4)
-      break;
-
-    AddrTable table;
-    table.unitLength = unitLength;
-    table.version = llvm::support::endian::read16le(ptr);
-    ptr += 2;
-
-    table.addrSize = *ptr++;
-    table.segSize = *ptr++;
-    tables.push_back(table);
-
-    offsetBases.push_back(tableStart - reinterpret_cast<const uint8_t *>(data));
-    sizes.push_back(unitLength + 4);
-    headerSizes.push_back(4 + 2 + 1 + 1);
-
-    std::vector<uint64_t> addresses;
-    while (ptr + table.addrSize <= tableEnd) {
-      uint64_t addr = 0;
-      memcpy(&addr, ptr, table.addrSize);
-      ptr += table.addrSize;
-      addresses.push_back(addr);
-    }
-    allAddresses.push_back(std::move(addresses));
+  for (uint64_t i = sizeof(AddrTableHeader), idx = 0; i < sh_size;
+       i += header.addrSize, idx += 1) {
+    addresses.emplace_back(
+        std::make_shared<DebugAddrRef>(std::make_shared<IdxRef>(idx), nullptr));
   }
 }
 
-// Apply relocations to address entries
-void DebugAddrSection::applyRelocations(
-    const std::vector<std::shared_ptr<Relocation>> &relocs) {
-  for (const auto &rel : relocs) {
-    uint64_t r_offset = rel->getROffset();
+void DebugAddrSection::parseReferences(
+    const std::shared_ptr<RelocationSection> &relaSection) const {
+  const auto &logger = Logger::getInstance();
 
-    for (size_t i = 0; i < tables.size(); ++i) {
-      uint64_t tableStart = offsetBases[i] + headerSizes[i];
-      uint64_t tableEnd = offsetBases[i] + sizes[i];
+  std::unordered_map<uint64_t, size_t> addressMap;
+  uint64_t offset = sizeof(AddrTableHeader);
+  for (size_t i = 0; i < addresses.size(); i += 1) {
+    addressMap[offset] = i;
+    offset += header.addrSize;
+  }
 
-      if (r_offset < tableStart || r_offset >= tableEnd)
-        continue;
-
-      uint64_t offsetInTable = r_offset - tableStart;
-      if (offsetInTable % tables[i].addrSize != 0)
-        continue;
-
-      size_t entryIndex = offsetInTable / tables[i].addrSize;
-      if (entryIndex >= allAddresses[i].size())
-        continue;
-
-      allAddresses[i][entryIndex] = static_cast<uint64_t>(rel->getRAddend());
-    }
+  const auto &relaEntries = relaSection->getRelocations();
+  for (const auto &relaEntry : relaEntries) {
+    auto rOffset = relaEntry->getROffset();
+    const auto it = addressMap.find(rOffset);
+    logger.assertTrue(it != addressMap.end(),
+                      "Can not match rela.debug_addr and debug_addr");
+    addresses[it->second]->relaEntry = relaEntry;
   }
 }
 
-// Get address by table base offset and index
-uint64_t DebugAddrSection::getAddressByIndex(uint64_t baseOffset,
-                                             uint64_t index) const {
-  for (size_t i = 0; i < tables.size(); ++i) {
-    if (offsetBases[i] == baseOffset) {
-      if (index < allAddresses[i].size())
-        return allAddresses[i][index];
-    }
+void DebugAddrSection::layout() {
+  sh_size = sizeof(AddrTableHeader) + header.addrSize * addresses.size();
+  header.unitLength = sh_size - sizeof(uint32_t);
+  size_t i = 0;
+  uint64_t offset = sizeof(AddrTableHeader);
+  for (const auto &elem : addresses) {
+    elem->idx->setValue(i);
+    elem->relaEntry->getOffset()->setValue(offset);
+    i += 1;
+    offset += header.addrSize;
   }
-  return -1;
 }
 
 void DebugAddrSection::writeDataTo(char *buffer) {
-  std::vector<uint8_t> out;
+  uint64_t bufOff = 0;
 
-  for (size_t i = 0; i < tables.size(); ++i) {
-    const auto &table = tables[i];
-    const auto &addresses = allAddresses[i];
-    size_t startOffset = out.size();
+  auto *hdr = reinterpret_cast<AddrTableHeader *>(buffer);
+  hdr->unitLength = header.unitLength;
+  hdr->version = header.version;
+  hdr->addrSize = header.addrSize;
+  hdr->segSize = header.segSize;
 
-    // 1. Reserve space for unit_length (4 bytes)
-    out.resize(out.size() + 4);
+  bufOff += sizeof(AddrTableHeader);
 
-    // 2. Write header: version (2 bytes), addr_size (1), seg_size (1)
-    out.push_back(table.version & 0xff);
-    out.push_back((table.version >> 8) & 0xff);
-    out.push_back(table.addrSize);
-    out.push_back(table.segSize);
-
-    // 3. Write address entries
-    for (uint64_t addr : addresses) {
-      if (table.addrSize == 4) {
-        out.push_back(addr & 0xff);
-        out.push_back((addr >> 8) & 0xff);
-        out.push_back((addr >> 16) & 0xff);
-        out.push_back((addr >> 24) & 0xff);
-      } else if (table.addrSize == 8) {
-        for (int j = 0; j < 8; ++j)
-          out.push_back((addr >> (j * 8)) & 0xff);
-      } else {
-        assert(false && "Unsupported addr_size");
-      }
-    }
-
-    // 4. Fill in unit_length (total size minus length field)
-    uint32_t length = static_cast<uint32_t>(out.size() - startOffset - 4);
-    out[startOffset + 0] = (length & 0xff);
-    out[startOffset + 1] = (length >> 8) & 0xff;
-    out[startOffset + 2] = (length >> 16) & 0xff;
-    out[startOffset + 3] = (length >> 24) & 0xff;
+  for (size_t i = 0; i < addresses.size(); i += 1) {
+    uint64_t zero = 0;
+    memcpy(buffer + bufOff, &zero, header.addrSize);
+    bufOff += header.addrSize;
   }
-
-  // 5. Copy to target buffer
-  assert(out.size() <= sh_size && "Rewritten .debug_addr larger than original");
-  memcpy(buffer, out.data(), out.size());
 }
 
 void DebugAddrSection::dumpData(std::ostream &oss) const {
-  for (size_t i = 0; i < tables.size(); ++i) {
-    const auto &table = tables[i];
-    const auto &addresses = allAddresses[i];
-    oss << ".debug_addr contents:\n";
+  oss << ".debug_addr contents:\n";
 
-    oss << "Address table header: length = 0x" << std::hex << std::setw(8)
-        << std::setfill('0') << table.unitLength
-        << ", format = DWARF32, version = 0x" << std::setw(4) << table.version
-        << ", addr_size = 0x" << std::setw(2)
-        << static_cast<int>(table.addrSize) << ", seg_size = 0x" << std::setw(2)
-        << static_cast<int>(table.segSize) << std::dec << "\n";
+  oss << "Address table header: length = 0x" << std::hex << std::setw(8)
+      << std::setfill('0') << header.unitLength
+      << ", format = DWARF32, version = 0x" << std::setw(4) << header.version
+      << ", addr_size = 0x" << std::setw(2) << static_cast<int>(header.addrSize)
+      << ", seg_size = 0x" << std::setw(2) << static_cast<int>(header.segSize)
+      << std::dec << "\n";
 
-    oss << "Addrs: [\n";
-    for (uint64_t addr : addresses) {
-      if (table.addrSize == 4) {
-        oss << "0x" << std::hex << std::setw(8) << std::setfill('0')
-            << static_cast<uint32_t>(addr) << std::dec << "\n";
-      } else if (table.addrSize == 8) {
-        oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << addr
-            << std::dec << "\n";
-      } else {
-        oss << "# unsupported addr_size: " << static_cast<int>(table.addrSize)
-            << "\n";
-      }
+  oss << "Addrs: [\n";
+  for (size_t i = 0; i < addresses.size(); i += 1) {
+    if (header.addrSize == 4) {
+      oss << "0x" << std::hex << std::setw(8) << std::setfill('0') << 0
+          << std::dec << "\n";
+    } else if (header.addrSize == 8) {
+      oss << "0x" << std::hex << std::setw(16) << std::setfill('0') << 0
+          << std::dec << "\n";
+    } else {
+      oss << "# unsupported addr_size: " << static_cast<int>(header.addrSize)
+          << "\n";
     }
-    oss << "]\n";
   }
+  oss << "]\n";
 }
+
 } // namespace elf
 } // namespace funcv
 } // namespace illvm

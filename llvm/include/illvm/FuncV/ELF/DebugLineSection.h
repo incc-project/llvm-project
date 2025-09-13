@@ -5,11 +5,14 @@
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/DebugStrOffsetsSection.h"
 #include "illvm/FuncV/ELF/DebugStrSection.h"
+#include "illvm/FuncV/ELF/FormValue.h"
 #include "illvm/FuncV/ELF/Section.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
+
+// TODO: add comment: update while writing.
 
 class DebugLineSection final : public Section {
 private:
@@ -27,54 +30,40 @@ private:
     uint8_t line_range;
     uint8_t opcode_base;
     std::vector<uint8_t> standard_opcode_lengths;
-    uint8_t dir_format_count;
-    std::vector<std::pair<uint64_t, uint64_t>> dir_attrs;
+    uint8_t dir_format_count; // should always 1.
+    std::pair<uint64_t, uint64_t> dir_attr;
     uint64_t directory_count;
-    std::vector<FormValueRaw> directories;
+    std::vector<std::shared_ptr<FormValue>> directories;
     uint8_t file_name_entry_format_count;
     std::vector<std::pair<uint64_t, uint64_t>> file_attrs;
     uint64_t file_names_count;
     struct FileEntry {
       std::string name;
       uint64_t dir_index;
-      std::array<uint8_t, 16> md5; // For DWARFv5
-      FormValueRaw val;
+      std::vector<uint8_t> md5; // For DWARFv5
+      std::vector<std::shared_ptr<FormValue>> vals;
     };
     std::vector<FileEntry> file_names;
   };
 
-  struct Row {
-    uint64_t address = 0;
-    int32_t line = 1;
-    uint32_t column = 0;
-    uint32_t file = 1;
-    uint32_t isa = 0;
-    uint32_t discriminator = 0;
-    uint32_t op_index = 0;
-    bool is_stmt;
-    bool basic_block = false;
-    bool end_sequence = false;
-    bool prologue_end = false;
-    bool epilogue_begin = false;
-  };
-
   LineTableHeader header;
-  std::vector<Row> rows;
+  // immutable
+  std::vector<DebugLineNumberEntry> lineNumberEntries;
+  std::vector<DebugLineNumberBlock> lineNumberBlocks;
 
 public:
   DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
 
-  void dumpData(std::ostream &oss) const override;
+  // TODO: call in ObjFile.
+  void parseReferences(const std::shared_ptr<RelocationSection> &sec) const;
+
+  void layout() override;
+
+  void fini() override;
 
   void writeDataTo(char *buffer) override;
 
-  FormValueRaw parseFormValue(
-      uint64_t form, const uint8_t *&p, const uint8_t *end,
-      const DebugStrOffsetsSection *strOffsets = nullptr,
-      const DebugStrSection *strSection = nullptr,
-      const DebugAddrSection *addrSection = nullptr, uint64_t dieOffset = 0,
-      int strOffsetsTableIndex = -1, uint64_t addrBaseOffset = 0,
-      std::optional<int64_t> implicitConst = std::nullopt);
+  void dumpData(std::ostream &oss) const override;
 };
 
 } // namespace elf

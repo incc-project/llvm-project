@@ -15,21 +15,21 @@ public:
   // Structure representing an attribute-form pair in an abbreviation
   // declaration
   struct AttributeForm {
-    uint64_t attr;                        // DWARF attribute code
-    uint64_t form;                        // DWARF form code
-    std::optional<int64_t> implicitConst; // Optional implicit constant value
+    uint64_t attr = 0;                        // DWARF attribute code
+    uint64_t form = 0;                        // DWARF form code
+    int64_t implicitConst = 0;
   };
 
   // Structure representing an abbreviation declaration
   struct AbbreviationDecl {
-    uint64_t code;                        // Abbreviation code
-    uint64_t tag;                         // DWARF tag
-    bool hasChildren;                     // Whether this DIE has children
+    uint64_t code = 0;                        // Abbreviation code
+    uint64_t tag = 0;                         // DWARF tag
+    bool hasChildren = false;                     // Whether this DIE has children
     std::vector<AttributeForm> attrForms; // List of attribute-form pairs
   };
 
-  // Map of abbreviation tables (keyed by offset)
-  std::map<uint64_t, std::map<uint64_t, AbbreviationDecl>> abbrevTables;
+  // Map of abbreviation table
+  std::vector<AbbreviationDecl> abbrevTable;
 
   DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
                      const char *_data);
@@ -38,9 +38,8 @@ public:
 
   void writeDataTo(char *buffer) override;
 
-  // Get abbreviation declaration by offset and code
-  const AbbreviationDecl *getAbbreviationDecl(uint64_t abbrevOffset,
-                                              uint64_t code) const;
+  // Get abbreviation declaration by code
+  const AbbreviationDecl &getAbbreviationDecl(uint64_t code) const;
 };
 
 } // namespace elf
