@@ -9,9 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
-
-#include "llvm/IR/InlineAsm.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -21,20 +19,17 @@ namespace elf {
 
 DebugInfoSection::DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr,
                                    const char *_data,
-                                   FormValueBaseSections &baseSections)
+                                   FormValueBaseSections &baseSections,
+                                   llvm::Error &err)
     : Section(SectionType::DebugInfo, shdr, _data) {
   // Reference: "DWARF5", page 200.
-  const auto &logger = Logger::getInstance();
-
   const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *p = start;
 
   // Read header.
-  logger.assertTrue(sizeof(CompileUnitHeader) <= sh_size,
-                    "Can not read compile unit table header");
+  ILLVM_FCHECK(sizeof(CompileUnitHeader) <= sh_size, "");
   const auto *hdr = reinterpret_cast<const CompileUnitHeader *>(p);
-  logger.assertTrue(hdr->unitLength == sh_size - sizeof(uint32_t),
-                    "Invalid compile unit table size");
+  ILLVM_FCHECK(hdr->unitLength == sh_size - sizeof(uint32_t), "");
   header.unitLength = hdr->unitLength;
   header.version = hdr->version;
   header.unitType = hdr->unitType;
@@ -54,7 +49,7 @@ DebugInfoSection::DIE
 DebugInfoSection::parseDIE(const uint8_t *&p,
                            FormValueBaseSections &baseSections) {
   unsigned len = 0;
-  const uint64_t abbrevCode = DebugConvert::decodeULEB128(p, &len);
+  const uint64_t abbrevCode = DebugConvert::decodeULEB128(p, len);
   p += len;
 
   if (abbrevCode == 0) {

@@ -1,14 +1,15 @@
 #include "illvm/FuncV/ELF/ReuseSymbol.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
-void ReuseSymbol::replaceNewSymbol(const std::shared_ptr<Section> &newSection,
-                                   const std::shared_ptr<Symbol> &newSymbol,
-                                   const std::shared_ptr<Symbol> &oldSymbol) {
+llvm::Error
+ReuseSymbol::replaceNewSymbol(const std::shared_ptr<Section> &newSection,
+                              const std::shared_ptr<Symbol> &newSymbol,
+                              const std::shared_ptr<Symbol> &oldSymbol) {
   newSymbol->setStValue(0);
   newSymbol->getValue()->setValue(oldSymbol->getValueValue());
   newSymbol->setStSize(oldSymbol->getStSize());
@@ -20,14 +21,13 @@ void ReuseSymbol::replaceNewSymbol(const std::shared_ptr<Section> &newSection,
   const int specialShndx = oldSymbol->getSpecialShndx();
   newSymbol->setSpecialShndx(specialShndx);
   if (specialShndx == -1) {
-    Logger::getInstance().assertTrue(
-        newSection != nullptr,
-        "ReuseSymbol::replaceNewSymbol: new Section should not be nullptr");
+    ILLVM_ECHECK(newSection != nullptr, "");
     newSymbol->setSecIdx(newSection->getIdx());
   }
+  return llvm::Error::success();
 }
 
-std::shared_ptr<Symbol>
+llvm::Expected<std::shared_ptr<Symbol>>
 ReuseSymbol::createNewSymbol(ObjFile &newObjFile,
                              const std::shared_ptr<Section> &newSection,
                              const std::shared_ptr<Symbol> &oldSymbol) {
@@ -59,9 +59,7 @@ ReuseSymbol::createNewSymbol(ObjFile &newObjFile,
   const int specialShndx = oldSymbol->getSpecialShndx();
   newSymbol->setSpecialShndx(specialShndx);
   if (specialShndx == -1) {
-    Logger::getInstance().assertTrue(
-        newSection != nullptr,
-        "ReuseSymbol::createNewSymbol: new Section should not be nullptr");
+    ILLVM_ECHECK(newSection != nullptr, "");
     newSymbol->setSecIdx(newSection->getIdx());
   }
 
@@ -115,7 +113,7 @@ void ReuseSymbol::handleReuseVersionSymbol(ObjFile &newObjFile,
   newObjFile.getSymTab()->push_back(newSymbol);
 }
 
-void ReuseSymbol::run(ObjFile &newObjFile, const BDG &bdg) {
+llvm::Error ReuseSymbol::run(ObjFile &newObjFile, const BDG &bdg) {
   const auto &funcVReuseNodes = bdg.getFuncVReuseNodes();
 
   for (const auto &p : funcVReuseNodes) {
@@ -125,17 +123,21 @@ void ReuseSymbol::run(ObjFile &newObjFile, const BDG &bdg) {
     const auto oldSymbol = reuseNode->getOldSymbol();
     auto newSymbol = reuseNode->getNewSymbol();
     if (newSymbol == nullptr) {
-      newSymbol =
-          createNewSymbol(newObjFile, reuseNode->getNewSection(), oldSymbol);
+      if (auto err =
+              createNewSymbol(newObjFile, reuseNode->getNewSection(), oldSymbol)
+                  .moveInto(newSymbol)) {
+        return err;
+      }
       reuseNode->setNewSymbol(newSymbol);
     } else if (oldSymbol->getSecIdx() != nullptr &&
                newSymbol->getSecIdx() == nullptr) {
-      replaceNewSymbol(reuseNode->getNewSection(), newSymbol, oldSymbol);
+      return replaceNewSymbol(reuseNode->getNewSection(), newSymbol, oldSymbol);
     }
   }
 
   // Handle reuse version symbol.
   handleReuseVersionSymbol(newObjFile, bdg.getOldReuseVersion());
+  return llvm::Error::success();
 }
 
 } // namespace elf

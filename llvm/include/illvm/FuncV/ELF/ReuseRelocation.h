@@ -22,28 +22,29 @@ namespace elf {
 
 class ReuseRelocation {
 private:
-  static std::shared_ptr<Relocation> createNewRelaEntry(
-    const std::shared_ptr<Relocation> &oldRelaEntry,
-    const std::unordered_map<std::string, std::weak_ptr<ReuseNode>>
-    &dependencies);
+  static llvm::Expected<std::shared_ptr<Relocation>> createNewRelaEntry(
+      const std::shared_ptr<Relocation> &oldRelaEntry,
+      const std::unordered_map<std::string, std::weak_ptr<ReuseNode>>
+          &dependencies);
 
-  static std::shared_ptr<RelocationSection> createNewRelaSection(
+  static llvm::Expected<std::shared_ptr<RelocationSection>>
+  createNewRelaSection(
       const std::shared_ptr<ReuseNode> &reuseNode, ObjFile &newObjFile,
       const std::shared_ptr<Section> &newSection,
       const std::shared_ptr<RelocationSection> &oldRelocationSection);
 
-  static void reuseCIERelaEntries(const std::shared_ptr<ReuseNode> &reuseNode,
-                                   ObjFile &newObjFile,
-                                   const std::shared_ptr<CFI> &newCFI,
-                                   const std::shared_ptr<CFI> &oldCFI);
+  static llvm::Error
+  reuseCIERelaEntries(const std::shared_ptr<ReuseNode> &reuseNode,
+                      ObjFile &newObjFile, const std::shared_ptr<CFI> &newCFI,
+                      const std::shared_ptr<CFI> &oldCFI);
 
-  static void reuseFDERelaEntries(const std::shared_ptr<ReuseNode> &reuseNode,
-                                   ObjFile &newObjFile,
-                                   const std::shared_ptr<FDE> &newFDE,
-                                   const std::shared_ptr<FDE> &oldFDE);
+  static llvm::Error
+  reuseFDERelaEntries(const std::shared_ptr<ReuseNode> &reuseNode,
+                      ObjFile &newObjFile, const std::shared_ptr<FDE> &newFDE,
+                      const std::shared_ptr<FDE> &oldFDE);
 
 public:
-  static void run(ObjFile &newObjFile, const BDG &bdg);
+  static llvm::Error run(ObjFile &newObjFile, const BDG &bdg);
 };
 
 } // namespace elf

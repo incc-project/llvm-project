@@ -4,7 +4,7 @@
 #include <queue>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/Strings.h"
 
 namespace illvm {
@@ -281,26 +281,23 @@ void BDG::handleSymSecDep(const std::shared_ptr<ReuseNode> &reuseNode) {
   }
 }
 
-void BDG::handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode) {
-  const auto &logger = Logger::getInstance();
-
+llvm::Error BDG::handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode) {
   const auto oldRelaSection = reuseNode->getOldRelaSection();
   if (oldRelaSection == nullptr) {
-    return;
+    return llvm::Error::success();
   }
 
   const auto &relaEntries = oldRelaSection->getRelocations();
   for (const auto &relaEntry : relaEntries) {
     const auto symbol = relaEntry->getSym();
-    logger.assertTrue(symbol != nullptr,
-                      "BDG::handleRelaDep symbol should not be nullptr");
-
+    ILLVM_ECHECK(symbol != nullptr, "");
     const auto name = symbol->getNameValue();
     const auto it = reuseNodeIdrMap.find(name);
     if (it != reuseNodeIdrMap.end()) {
       reuseNode->addDependencies(it->second);
     }
   }
+  return llvm::Error::success();
 }
 
 void BDG::handleFDEDep(const std::shared_ptr<CIE> &cie,
@@ -346,7 +343,7 @@ void BDG::handleEhDep(ObjFile &oldObjFile) {
   }
 }
 
-void BDG::buildReuseNodesDependencies(ObjFile &oldObjFile) {
+llvm::Error BDG::buildReuseNodesDependencies(ObjFile &oldObjFile) {
   for (const auto &p : reuseNodeIdrMap) {
     const auto reuseNode = p.second;
 
@@ -354,14 +351,18 @@ void BDG::buildReuseNodesDependencies(ObjFile &oldObjFile) {
     handleSymSecDep(reuseNode);
 
     // (2) Extract dependencies from relocation entries.
-    handleRelaDep(reuseNode);
+    if (auto err = handleRelaDep(reuseNode)) {
+      return err;
+    }
   }
 
   // (3) Extract eh dependencies.
   handleEhDep(oldObjFile);
+
+  return llvm::Error::success();
 }
 
-void BDG::build(ObjFile &oldObjFile, ObjFile &newObjFile) {
+llvm::Error BDG::build(ObjFile &oldObjFile, ObjFile &newObjFile) {
   // (1) Init old reuse version.
   loadOldReuseVersion(oldObjFile);
 
@@ -386,7 +387,11 @@ void BDG::build(ObjFile &oldObjFile, ObjFile &newObjFile) {
   addEHsForReuseNodes(oldObjFile, newObjFile);
 
   // (7) Build dependencies between reuse nodes.
-  buildReuseNodesDependencies(oldObjFile);
+  if (auto err = buildReuseNodesDependencies(oldObjFile)) {
+    return err;
+  }
+
+  return llvm::Error::success();
 }
 
 void BDG::propagation(const std::unordered_set<std::string> &funcXSet) {

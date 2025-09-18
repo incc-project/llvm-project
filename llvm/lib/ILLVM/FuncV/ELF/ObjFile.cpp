@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -16,9 +16,7 @@ bool ObjFile::getIsRela(const uint16_t m) {
          m == llvm::ELF::EM_X86_64;
 }
 
-void ObjFile::parseHeader() {
-  const auto &logger = Logger::getInstance();
-
+llvm::Error ObjFile::parseHeader() {
   using Elf_Ehdr = llvm::object::ELF64LE::Ehdr;
 
   const char *object = binFile.readBytes(0);
@@ -42,55 +40,61 @@ void ObjFile::parseHeader() {
   e_shstrndx = ehdr->e_shstrndx;
 
   // We do not support 32bit architecture.
-  logger.assertTrue(getIsRela(e_machine), "We do not support rel");
+  ILLVM_ECHECK(getIsRela(e_machine), "ILLVM do not support rel");
+
+  return llvm::Error::success();
 }
 
-void ObjFile::parseStrSymTable(
+llvm::Error ObjFile::parseStrSymTable(
     const char *object,
     const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs) {
-  const auto &logger = Logger::getInstance();
-
   sections.resize(shdrs.size(), nullptr);
 
   std::shared_ptr<SymtabShndxSection> symTabShndx = nullptr;
   for (size_t i = 0; i < sections.size(); i++) {
     switch (shdrs[i]->sh_type) {
     case llvm::ELF::SHT_STRTAB:
-      sections[i] = std::make_shared<StringTableSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      if (auto err =
+              StringTableSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(sections[i])) {
+        return err;
+      }
       break;
     case llvm::ELF::SHT_SYMTAB:
-      logger.assertTrue(symTab == nullptr, "multiple symbol tables");
-      symTab = std::make_shared<SymbolTableSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      ILLVM_FCHECK(symTab == nullptr, "multiple symbol tables");
+      if (auto err =
+              SymbolTableSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(symTab)) {
+        return err;
+      }
       sections[i] = symTab;
       break;
     case llvm::ELF::SHT_SYMTAB_SHNDX:
-      logger.assertTrue(symTabShndx == nullptr,
-                        "multiple symtab shndx sections");
-      symTabShndx = std::make_shared<SymtabShndxSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      ILLVM_FCHECK(symTabShndx == nullptr, "multiple symtab shndx sections");
+      if (auto err =
+              SymtabShndxSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(symTabShndx)) {
+        return err;
+      }
       sections[i] = symTabShndx;
       break;
     default:
       break;
     }
   }
-  logger.assertTrue(symTab != nullptr, "missing symbol table");
+  ILLVM_FCHECK(symTab != nullptr, "missing symbol table");
   symTab->setSymtabShndx(symTabShndx);
   shstrTab = std::static_pointer_cast<StringTableSection>(sections[e_shstrndx]);
-  logger.assertTrue(shstrTab->getType() == SectionType::StrTab,
-                    "invalid shstrtab");
+  ILLVM_FCHECK(shstrTab->getType() == SectionType::StrTab, "");
   strTab = std::static_pointer_cast<StringTableSection>(
       sections[symTab->getShLink()]);
-  logger.assertTrue(strTab->getType() == SectionType::StrTab, "invalid strtab");
+  ILLVM_FCHECK(strTab->getType() == SectionType::StrTab, "");
+  return llvm::Error::success();
 }
 
-void ObjFile::parseOtherSections(
+llvm::Error ObjFile::parseOtherSections(
     const char *object,
     const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs) {
-  auto &logger = Logger::getInstance();
-
   // const llvm::object::ELF64LE::Shdr *debugInfoShdr = nullptr;
   // const char *debugInfoData = nullptr;
   // size_t debugInfoIndex = -1;
@@ -112,9 +116,13 @@ void ObjFile::parseOtherSections(
     const auto secNameStr = secName->getValue();
 
     if (secNameStr == ".eh_frame") {
-      sections[i] = std::make_shared<EhFrameSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
-      ehFrame = std::static_pointer_cast<EhFrameSection>(sections[i]);
+      if (auto err =
+              EhFrameSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(ehFrame)) {
+        return err;
+      }
+
+      sections[i] = ehFrame;
       continue;
     }
 
@@ -205,25 +213,34 @@ void ObjFile::parseOtherSections(
     case llvm::ELF::SHT_SYMTAB:
       continue;
     case llvm::ELF::SHT_RELA:
-      sections[i] = std::make_shared<RelocationSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      if (auto err =
+              RelocationSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(sections[i])) {
+        return err;
+      }
       if (secName->getValue() == ".rela.eh_frame") {
         relaEhFrame = std::static_pointer_cast<RelocationSection>(sections[i]);
       }
       break;
     case llvm::ELF::SHT_GROUP:
-      sections[i] = std::make_shared<GroupSection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      if (auto err =
+              GroupSection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(sections[i])) {
+        return err;
+      }
       break;
     default:
-      sections[i] = std::make_shared<OrdinarySection>(
-          shdrs[i], object + shdrs[i]->sh_offset);
+      if (auto err =
+              OrdinarySection::Create(shdrs[i], object + shdrs[i]->sh_offset)
+                  .moveInto(sections[i])) {
+        return err;
+      }
       break;
     }
   }
 
-  logger.assertTrue(ehFrame != nullptr && relaEhFrame != nullptr,
-                    "Missing eh_frame");
+  ILLVM_FCHECK(ehFrame != nullptr && relaEhFrame != nullptr,
+               "Missing eh_frame");
 
   // TODO Handle rela after 3.4.
   // if (debugStrOffShdr) {
@@ -265,6 +282,8 @@ void ObjFile::parseOtherSections(
   //       debugRnglist ? debugRnglist.get() : nullptr);
   //   sections[debugInfoIndex] = debugInfoSection;
   // }
+
+  return llvm::Error::success();
 }
 
 void ObjFile::parseReferences() {
@@ -314,17 +333,14 @@ void ObjFile::parseReferences() {
   }
 }
 
-void ObjFile::parseSections() {
-  const auto &logger = Logger::getInstance();
-
+llvm::Error ObjFile::parseSections() {
   using Elf_Shdr = llvm::object::ELF64LE::Shdr;
 
   const char *object = binFile.readBytes(0);
   std::vector<const Elf_Shdr *> shdrs;
   shdrs.reserve(e_shnum);
 
-  logger.assertTrue(e_shentsize == sizeof(Elf_Shdr),
-                    "Invalid ELF file: e_shentsize != sizeof(Elf_Shdr)");
+  ILLVM_FCHECK(e_shentsize == sizeof(Elf_Shdr), "");
 
   // 1. Parse shdrs.
   // 1.1. Add the first shdr.
@@ -352,15 +368,21 @@ void ObjFile::parseSections() {
 
   // 2. Parse shdrs to sections.
   // 2.1. Parse string table and symbol table.
-  parseStrSymTable(object, shdrs);
+  if (auto err = parseStrSymTable(object, shdrs)) {
+    return err;
+  }
   // 2.2. Parse other sections.
-  parseOtherSections(object, shdrs);
+  if (auto err = parseOtherSections(object, shdrs)) {
+    return err;
+  }
 
   // 3. Parse references.
   parseReferences();
+
+  return llvm::Error::success();
 }
 
-std::shared_ptr<SymtabShndxSection> ObjFile::createSymtabShndx() {
+  llvm::Expected<std::shared_ptr<SymtabShndxSection>> ObjFile::createSymtabShndx() {
   using Elf_Shdr = llvm::object::ELF64LE::Shdr;
 
   Elf_Shdr shdr;
@@ -376,7 +398,10 @@ std::shared_ptr<SymtabShndxSection> ObjFile::createSymtabShndx() {
   shdr.sh_entsize = sizeof(llvm::object::ELF64LE::Word);
 
   // Create new section.
-  const auto newSection = std::make_shared<SymtabShndxSection>(&shdr, nullptr);
+  std::shared_ptr<SymtabShndxSection> newSection;
+  if (auto err = SymtabShndxSection::Create(&shdr, nullptr).moveInto(newSection)) {
+    return err;
+  }
 
   // Create new idx ref.
   newSection->setIdx(std::make_shared<IdxRef>(sections.size()));
@@ -395,9 +420,7 @@ std::shared_ptr<SymtabShndxSection> ObjFile::createSymtabShndx() {
 
 std::size_t ObjFile::alignOffset(const std::uint64_t offset,
                                  const std::uint64_t sh_addralign) {
-  const auto &logger = Logger::getInstance();
-
-  logger.assertTrue(sh_addralign != 0, "sh_addralign cannot be zero.");
+  ILLVM_FCHECK(sh_addralign != 0, "");
   if (offset % sh_addralign == 0) {
     return offset;
   }
@@ -444,15 +467,24 @@ void ObjFile::layout() {
   e_shoff = secOff;
 }
 
-void ObjFile::init() {
-  parseHeader();
-  parseSections();
+llvm::Error ObjFile::init() {
+  if (auto err = parseHeader()) {
+    return err;
+  }
+  if (auto err = parseSections()) {
+    return err;
+  }
+  return llvm::Error::success();
 }
 
-void ObjFile::fini() {
+llvm::Error ObjFile::fini() {
   // 1. Create necessary sections if needed.
   if (symTab->needSymtabShNdx() && symTab->getSymtabShndx() == nullptr) {
-    symTab->setSymtabShndx(createSymtabShndx());
+    std::shared_ptr<SymtabShndxSection> newSection;
+    if (auto err = createSymtabShndx().moveInto(newSection)) {
+      return err;
+    }
+    symTab->setSymtabShndx(newSection);
   }
 
   // 2. Layout.
@@ -494,6 +526,8 @@ void ObjFile::fini() {
     sections[0]->setShLink(e_shstrndx);
     e_shstrndx = llvm::ELF::SHN_XINDEX;
   }
+
+  return llvm::Error::success();
 }
 
 void ObjFile::save(const std::string &outputPath) const {

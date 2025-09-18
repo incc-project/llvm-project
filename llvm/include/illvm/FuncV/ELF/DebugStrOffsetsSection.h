@@ -24,10 +24,23 @@ private:
   StringOffsetsHeader header;
   std::vector<std::shared_ptr<DebugStrOffsetRef>> offsets;
 
-public:
   DebugStrOffsetsSection(
       const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
-      const std::shared_ptr<DebugStrSection> &debugStrSection);
+      const std::shared_ptr<DebugStrSection> &debugStrSection, llvm::Error &err);
+
+public:
+
+
+  static llvm::Expected<std::shared_ptr<DebugStrOffsetsSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, const std::shared_ptr<DebugStrSection> &debugStrSection) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugStrOffsetsSection>(
+        new DebugStrOffsetsSection(shdr, _data, debugStrSection, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   std::shared_ptr<DebugStrOffsetRef> getStrOffsetRef(uint32_t idx);
 

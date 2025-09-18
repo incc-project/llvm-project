@@ -1,5 +1,6 @@
 add_llvm_component_library(ILLVMSupport
   BinFile.cpp
+  Diagnostics.cpp
   FileSystem.cpp
   Interval.cpp
   Json.cpp

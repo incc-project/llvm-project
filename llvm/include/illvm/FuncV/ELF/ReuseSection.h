@@ -20,12 +20,12 @@ namespace funcv {
 namespace elf {
 
 class ReuseSection {
-  static std::shared_ptr<Section>
+  static llvm::Expected<std::shared_ptr<Section>>
   createNewSection(ObjFile &newObjFile,
                    const std::shared_ptr<Section> &oldSection);
 
 public:
-  static void run(ObjFile &newObjFile, const BDG &bdg);
+  static llvm::Error run(ObjFile &newObjFile, const BDG &bdg);
 };
 
 } // namespace elf

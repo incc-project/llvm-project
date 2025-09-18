@@ -26,9 +26,20 @@ private:
 
   std::vector<ArangeSet> aranges;
 
-public:
   DebugArangeSection(const llvm::object::ELF64LE::Shdr *shdr,
-                     const char *_data);
+                       const char *_data, llvm::Error &err);
+
+public:
+  static llvm::Expected<std::shared_ptr<DebugArangeSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugArangeSection>(
+        new DebugArangeSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void writeDataTo(char *buffer) override;
 

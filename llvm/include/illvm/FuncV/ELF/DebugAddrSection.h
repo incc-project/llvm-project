@@ -23,11 +23,23 @@ private:
   AddrTableHeader header;
   std::vector<std::shared_ptr<DebugAddrRef>> addresses;
 
+  DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                   llvm::Error &err);
+
 public:
-  DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+  static llvm::Expected<std::shared_ptr<DebugAddrSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugAddrSection>(
+        new DebugAddrSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   // TODO call this function in ObjFile
-  void
+  llvm::Error
   parseReferences(const std::shared_ptr<RelocationSection> &relaSection) const;
 
   void layout() override;

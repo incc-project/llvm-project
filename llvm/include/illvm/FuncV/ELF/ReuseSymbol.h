@@ -15,17 +15,19 @@
 
 #include "illvm/FuncV/ELF/BDG.h"
 
+#include "llvm/Support/Error.h"
+
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 class ReuseSymbol {
 private:
-  static void replaceNewSymbol(const std::shared_ptr<Section> &newSection,
+  static llvm::Error replaceNewSymbol(const std::shared_ptr<Section> &newSection,
                                const std::shared_ptr<Symbol> &newSymbol,
                                const std::shared_ptr<Symbol> &oldSymbol);
 
-  static std::shared_ptr<Symbol>
+  static llvm::Expected<std::shared_ptr<Symbol>>
   createNewSymbol(ObjFile &newObjFile,
                   const std::shared_ptr<Section> &newSection,
                   const std::shared_ptr<Symbol> &oldSymbol);
@@ -34,7 +36,7 @@ private:
                                        const uint64_t oldReuseVersion);
 
 public:
-  static void run(ObjFile &newObjFile, const BDG &bdg);
+  static llvm::Error run(ObjFile &newObjFile, const BDG &bdg);
 };
 
 } // namespace elf

@@ -1,29 +1,24 @@
 #include "illvm/Support/BinFile.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 
 BinFile::BinFile(const std::string &path)
     : filePath(path), fileData(nullptr), fileSize(0) {
-  const auto &logger = Logger::getInstance();
-
   std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-  if (!file.is_open()) {
-    logger.fatal("Failed to open file: " + filePath);
-  }
+  ILLVM_FCHECK(file.is_open(), "Failed to open file: " + filePath);
 
   fileSize = file.tellg();
   file.seekg(0, std::ios::beg);
 
   fileData = malloc(fileSize);
-  if (!fileData) {
-    logger.fatal("Memory allocation failed for file: " + filePath);
-  }
+  ILLVM_FCHECK(fileData != nullptr,
+               "Memory allocation failed for file: " + filePath);
 
   if (!file.read(static_cast<char *>(fileData), fileSize)) {
     free(fileData);
-    logger.fatal("Error reading file: " + filePath);
+    ILLVM_UNREACHABLE("Error reading file: " + filePath);
   }
 
   file.close();

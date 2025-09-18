@@ -14,7 +14,7 @@ namespace funcv {
 namespace elf {
 
 DebugStrSection::DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                 const char *_data)
+                                 const char *_data, llvm::Error &err)
     : Section(SectionType::DebugStr, shdr, _data) {
   const char *start = data;
   const char *end = data + sh_size;

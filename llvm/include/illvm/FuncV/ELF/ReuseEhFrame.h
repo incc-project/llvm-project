@@ -30,7 +30,7 @@ private:
                const std::shared_ptr<FDE> &oldFDE);
 
 public:
-  static void run(ObjFile &newObjFile, const BDG &bdg);
+  static llvm::Error run(ObjFile &newObjFile, const BDG &bdg);
 };
 
 } // namespace elf

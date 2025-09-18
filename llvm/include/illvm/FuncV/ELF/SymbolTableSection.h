@@ -29,11 +29,24 @@ private:
   // Reconstruction by SymbolTableSection.
   std::vector<uint32_t> indexes;
 
+  SymtabShndxSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                     llvm::Error &err);
+
 public:
   friend class SymbolTableSection;
 
-  SymtabShndxSection(const llvm::object::ELF64LE::Shdr *shdr,
-                     const char *_data);
+  static llvm::Expected<std::shared_ptr<SymtabShndxSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<SymtabShndxSection>(
+        new SymtabShndxSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
+
+
 
   void writeDataTo(char *buffer) override;
 
@@ -49,9 +62,20 @@ private:
   // Update after layout.
   uint64_t localSymNum;
 
+  SymbolTableSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                     llvm::Error &err);
+
 public:
-  SymbolTableSection(const llvm::object::ELF64LE::Shdr *shdr,
-                     const char *_data);
+  static llvm::Expected<std::shared_ptr<SymbolTableSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<SymbolTableSection>(
+        new SymbolTableSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void parseReferences(const std::vector<std::shared_ptr<Section>> &sections,
                        const std::shared_ptr<StringTableSection> &strTab) const;

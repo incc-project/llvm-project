@@ -14,7 +14,7 @@ namespace funcv {
 namespace elf {
 
 DebugLoclistsSection::DebugLoclistsSection(
-    const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+    const llvm::object::ELF64LE::Shdr *shdr, const char *_data, llvm::Error &err)
     : Section(SectionType::DebugLoclists, shdr, _data) {
   const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *end = start + sh_size;
@@ -48,7 +48,7 @@ DebugLoclistsSection::DebugLoclistsSection(
     }
     switch (kind) {
     case 0x01: {
-      uint64_t value = DebugConvert::decodeULEB128(start, &n);
+      uint64_t value = DebugConvert::decodeULEB128(start, n);
       start += n;
       entry.values.push_back(value);
       break;
@@ -56,9 +56,9 @@ DebugLoclistsSection::DebugLoclistsSection(
     case 0x02:
     case 0x03:
     case 0x04: {
-      uint64_t value0 = DebugConvert::decodeULEB128(start, &n);
+      uint64_t value0 = DebugConvert::decodeULEB128(start, n);
       start += n;
-      uint64_t value1 = DebugConvert::decodeULEB128(start, &n);
+      uint64_t value1 = DebugConvert::decodeULEB128(start, n);
       start += n;
       entry.values = {value0, value1};
       break;
@@ -88,7 +88,7 @@ DebugLoclistsSection::DebugLoclistsSection(
                           ? llvm::support::endian::read64le(start)
                           : llvm::support::endian::read32le(start);
       start += header.addrSize;
-      uint64_t length = DebugConvert::decodeULEB128(start, &n);
+      uint64_t length = DebugConvert::decodeULEB128(start, n);
       start += n;
       entry.values = {addr, length};
       break;
@@ -100,7 +100,7 @@ DebugLoclistsSection::DebugLoclistsSection(
     }
 
     if (kind != 0x01 && kind != 0x06) {
-      uint64_t exprLength = DebugConvert::decodeULEB128(start, &n);
+      uint64_t exprLength = DebugConvert::decodeULEB128(start, n);
       start += n;
       entry.expr.insert(entry.expr.end(), start, start + exprLength);
       start += exprLength;
@@ -110,81 +110,81 @@ DebugLoclistsSection::DebugLoclistsSection(
 }
 
 void DebugLoclistsSection::writeDataTo(char *buffer) {
-  std::vector<uint8_t> out;
-
-  uint32_t len = (uint32_t)header.length;
-  out.push_back(len & 0xff);
-  out.push_back((len >> 8) & 0xff);
-  out.push_back((len >> 16) & 0xff);
-  out.push_back((len >> 24) & 0xff);
-
-  out.push_back(header.version & 0xff);
-  out.push_back((header.version >> 8) & 0xff);
-
-  out.push_back(header.addrSize);
-  out.push_back(header.segSize);
-
-  uint32_t oc = header.offsetEntryCount;
-  out.push_back(oc & 0xff);
-  out.push_back((oc >> 8) & 0xff);
-  out.push_back((oc >> 16) & 0xff);
-  out.push_back((oc >> 24) & 0xff);
-
-  for (auto off : offsets) {
-    uint32_t val = (uint32_t)off;
-    out.push_back(val & 0xff);
-    out.push_back((val >> 8) & 0xff);
-    out.push_back((val >> 16) & 0xff);
-    out.push_back((val >> 24) & 0xff);
-  }
-
-  for (auto &e : entries) {
-    out.push_back(e.kind);
-
-    switch (e.kind) {
-    case 0x01:
-      DebugConvert::encodeULEB128(e.values[0], out);
-      break;
-    case 0x02:
-    case 0x03:
-    case 0x04:
-      DebugConvert::encodeULEB128(e.values[0], out);
-      DebugConvert::encodeULEB128(e.values[1], out);
-      break;
-    case 0x06: {
-      uint64_t v = e.values[0];
-      for (int i = 0; i < header.addrSize; i++)
-        out.push_back((v >> (i * 8)) & 0xff);
-      break;
-    }
-    case 0x07: {
-      uint64_t v1 = e.values[0];
-      uint64_t v2 = e.values[1];
-      for (int i = 0; i < header.addrSize; i++)
-        out.push_back((v1 >> (i * 8)) & 0xff);
-      for (int i = 0; i < header.addrSize; i++)
-        out.push_back((v2 >> (i * 8)) & 0xff);
-      break;
-    }
-    case 0x08: { // start_length
-      uint64_t v1 = e.values[0];
-      for (int i = 0; i < header.addrSize; i++)
-        out.push_back((v1 >> (i * 8)) & 0xff);
-      DebugConvert::encodeULEB128(e.values[1], out);
-      break;
-    }
-    default:
-      break;
-    }
-    if (!e.expr.empty()) {
-      DebugConvert::encodeULEB128(e.expr.size(), out); // 先写长度
-      out.insert(out.end(), e.expr.begin(), e.expr.end());
-    }
-  }
-
-  assert(out.size() <= sh_size &&
-         "Rewritten .debug_aranges larger than original");
-  memcpy(buffer, out.data(), out.size());
+  // std::vector<uint8_t> out;
+  //
+  // uint32_t len = (uint32_t)header.length;
+  // out.push_back(len & 0xff);
+  // out.push_back((len >> 8) & 0xff);
+  // out.push_back((len >> 16) & 0xff);
+  // out.push_back((len >> 24) & 0xff);
+  //
+  // out.push_back(header.version & 0xff);
+  // out.push_back((header.version >> 8) & 0xff);
+  //
+  // out.push_back(header.addrSize);
+  // out.push_back(header.segSize);
+  //
+  // uint32_t oc = header.offsetEntryCount;
+  // out.push_back(oc & 0xff);
+  // out.push_back((oc >> 8) & 0xff);
+  // out.push_back((oc >> 16) & 0xff);
+  // out.push_back((oc >> 24) & 0xff);
+  //
+  // for (auto off : offsets) {
+  //   uint32_t val = (uint32_t)off;
+  //   out.push_back(val & 0xff);
+  //   out.push_back((val >> 8) & 0xff);
+  //   out.push_back((val >> 16) & 0xff);
+  //   out.push_back((val >> 24) & 0xff);
+  // }
+  //
+  // for (auto &e : entries) {
+  //   out.push_back(e.kind);
+  //
+  //   switch (e.kind) {
+  //   case 0x01:
+  //     DebugConvert::encodeULEB128(e.values[0], out);
+  //     break;
+  //   case 0x02:
+  //   case 0x03:
+  //   case 0x04:
+  //     DebugConvert::encodeULEB128(e.values[0], out);
+  //     DebugConvert::encodeULEB128(e.values[1], out);
+  //     break;
+  //   case 0x06: {
+  //     uint64_t v = e.values[0];
+  //     for (int i = 0; i < header.addrSize; i++)
+  //       out.push_back((v >> (i * 8)) & 0xff);
+  //     break;
+  //   }
+  //   case 0x07: {
+  //     uint64_t v1 = e.values[0];
+  //     uint64_t v2 = e.values[1];
+  //     for (int i = 0; i < header.addrSize; i++)
+  //       out.push_back((v1 >> (i * 8)) & 0xff);
+  //     for (int i = 0; i < header.addrSize; i++)
+  //       out.push_back((v2 >> (i * 8)) & 0xff);
+  //     break;
+  //   }
+  //   case 0x08: { // start_length
+  //     uint64_t v1 = e.values[0];
+  //     for (int i = 0; i < header.addrSize; i++)
+  //       out.push_back((v1 >> (i * 8)) & 0xff);
+  //     DebugConvert::encodeULEB128(e.values[1], out);
+  //     break;
+  //   }
+  //   default:
+  //     break;
+  //   }
+  //   if (!e.expr.empty()) {
+  //     DebugConvert::encodeULEB128(e.expr.size(), out); // 先写长度
+  //     out.insert(out.end(), e.expr.begin(), e.expr.end());
+  //   }
+  // }
+  //
+  // assert(out.size() <= sh_size &&
+  //        "Rewritten .debug_aranges larger than original");
+  // memcpy(buffer, out.data(), out.size());
 }
 
 void DebugLoclistsSection::dumpData(std::ostream &oss) const {

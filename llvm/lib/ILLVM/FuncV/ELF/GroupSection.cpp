@@ -3,23 +3,19 @@
 #include <iomanip>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 GroupSection::GroupSection(const llvm::object::ELF64LE::Shdr *shdr,
-                           const char *_data)
+                           const char *_data, llvm::Error &err)
     : Section(SectionType::Group, shdr, _data) {
   const auto &logger = Logger::getInstance();
 
-  logger.assertTrue(
-      shdr->sh_entsize == sizeof(uint32_t),
-      "Invalid group section: shdr->sh_entsize != sizeof(Elf_Rela)");
-  logger.assertTrue(
-      shdr->sh_size % shdr->sh_entsize == 0,
-      "Invalid group section: shdr->sh_size % shdr->sh_entsize != 0");
+  ILLVM_FCHECK(shdr->sh_entsize == sizeof(uint32_t), "");
+  ILLVM_FCHECK(shdr->sh_size % shdr->sh_entsize == 0, "");
 }
 
 void GroupSection::parseReferences(

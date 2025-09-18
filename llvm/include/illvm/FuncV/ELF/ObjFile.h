@@ -76,21 +76,21 @@ private:
 
   static bool getIsRela(const uint16_t m);
 
-  void parseHeader();
+  llvm::Error parseHeader();
 
-  void parseStrSymTable(
+  llvm::Error parseStrSymTable(
       const char *object,
       const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs);
 
-  void parseOtherSections(
+  llvm::Error parseOtherSections(
       const char *object,
       const std::vector<const llvm::object::ELF64LE::Shdr *> &shdrs);
 
   void parseReferences();
 
-  void parseSections();
+  llvm::Error parseSections();
 
-  std::shared_ptr<SymtabShndxSection> createSymtabShndx();
+  llvm::Expected<std::shared_ptr<SymtabShndxSection>> createSymtabShndx();
 
   static std::size_t alignOffset(const std::uint64_t offset,
                                  const std::uint64_t sh_addralign);
@@ -100,9 +100,9 @@ private:
 public:
   explicit ObjFile(const BinFile &_binFile) : binFile(_binFile) {}
 
-  void init();
+  llvm::Error init();
 
-  void fini();
+  llvm::Error fini();
 
   void save(const std::string &outputPath) const;
 

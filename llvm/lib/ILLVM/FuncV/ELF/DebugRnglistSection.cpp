@@ -16,7 +16,7 @@ namespace elf {
 
 DebugRnglistSection::DebugRnglistSection(
     const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
-    const DebugAddrSection *addrRef)
+    const DebugAddrSection *addrRef, llvm::Error &err)
     : Section(SectionType::DebugRnglists, shdr, _data), debugAddr(addrRef) {
   const uint8_t *p = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *end = p + sh_size;
@@ -52,28 +52,28 @@ DebugRnglistSection::DebugRnglistSection(
     unsigned n;
     switch (kind) {
     case 0x01: // DW_RLE_base_addressx
-      entry.value0 = DebugConvert::decodeULEB128(p, &n);
+      entry.value0 = DebugConvert::decodeULEB128(p, n);
       p += n;
       break;
 
     case 0x02: // DW_RLE_startx_endx
-      entry.value0 = DebugConvert::decodeULEB128(p, &n);
+      entry.value0 = DebugConvert::decodeULEB128(p, n);
       p += n;
-      entry.value1 = DebugConvert::decodeULEB128(p, &n);
+      entry.value1 = DebugConvert::decodeULEB128(p, n);
       p += n;
       break;
 
     case 0x03: // DW_RLE_startx_length
-      entry.value0 = DebugConvert::decodeULEB128(p, &n);
+      entry.value0 = DebugConvert::decodeULEB128(p, n);
       p += n;
-      entry.value1 = DebugConvert::decodeULEB128(p, &n);
+      entry.value1 = DebugConvert::decodeULEB128(p, n);
       p += n;
       break;
 
     case 0x04: // DW_RLE_offset_pair
-      entry.value0 = DebugConvert::decodeULEB128(p, &n);
+      entry.value0 = DebugConvert::decodeULEB128(p, n);
       p += n;
-      entry.value1 = DebugConvert::decodeULEB128(p, &n);
+      entry.value1 = DebugConvert::decodeULEB128(p, n);
       p += n;
       break;
 
@@ -94,7 +94,7 @@ DebugRnglistSection::DebugRnglistSection(
     case 0x07:                                           // DW_RLE_start_length
       entry.value0 = llvm::support::endian::read64le(p); // address
       p += header.addr_size;
-      entry.value1 = DebugConvert::decodeULEB128(p, &n); // length
+      entry.value1 = DebugConvert::decodeULEB128(p, n); // length
       p += n;
       break;
 
@@ -190,98 +190,98 @@ void DebugRnglistSection::registerAddrBase(uint32_t index,
 }
 
 void DebugRnglistSection::writeDataTo(char *buffer) {
-  std::vector<uint8_t> out;
-
-  // unit_length 占位（DWARF32）
-  size_t unit_len_pos = out.size();
-  out.resize(out.size() + 4, 0);
-
-  // header: version, addr_size, seg_size, offset_entry_count
-  uint8_t b2[2];
-  llvm::support::endian::write16le(b2, header.version);
-  out.insert(out.end(), b2, b2 + 2);
-
-  out.push_back(static_cast<uint8_t>(header.addr_size));
-  out.push_back(static_cast<uint8_t>(header.seg_size));
-
-  uint8_t b4[4];
-  llvm::support::endian::write32le(b4, header.offset_entry_count);
-  out.insert(out.end(), b4, b4 + 4);
-
-  // offsets 表
-  for (uint32_t off : offsets) {
-    llvm::support::endian::write32le(b4, off);
-    out.insert(out.end(), b4, b4 + 4);
-  }
-
-  // entries（按解析结果逐条写回）
-  for (auto &rangeList : rangeLists) {
-    for (const auto &e : rangeList.second) {
-      out.push_back(static_cast<uint8_t>(e.kind));
-
-      if (e.kind == 0x00) // DW_RLE_end_of_list
-        break;
-
-      switch (e.kind) {
-      case 0x01: // DW_RLE_base_addressx: index (ULEB)
-        DebugConvert::encodeULEB128(e.value0, out);
-        break;
-
-      case 0x02: // DW_RLE_startx_endx: start_index(ULEB), end_index(ULEB)
-        DebugConvert::encodeULEB128(e.value0, out);
-        DebugConvert::encodeULEB128(e.value1, out);
-        break;
-
-      case 0x03: // DW_RLE_startx_length: start_index(ULEB), length(ULEB)
-        DebugConvert::encodeULEB128(e.value0, out);
-        DebugConvert::encodeULEB128(e.value1, out);
-        break;
-
-      case 0x04: // DW_RLE_offset_pair: start_off(ULEB), end_off(ULEB)
-        DebugConvert::encodeULEB128(e.value0, out);
-        DebugConvert::encodeULEB128(e.value1, out);
-        break;
-
-      case 0x05: { // DW_RLE_base_address: base_addr (addr_size bytes)
-        uint64_t v = e.value0;
-        for (uint8_t i = 0; i < header.addr_size; ++i)
-          out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
-        break;
-      }
-
-      case 0x06: { // DW_RLE_start_end: start_addr(addr_size),
-                   // end_addr(addr_size)
-        uint64_t a0 = e.value0, a1 = e.value1;
-        for (uint8_t i = 0; i < header.addr_size; ++i)
-          out.push_back(static_cast<uint8_t>((a0 >> (i * 8)) & 0xFF));
-        for (uint8_t i = 0; i < header.addr_size; ++i)
-          out.push_back(static_cast<uint8_t>((a1 >> (i * 8)) & 0xFF));
-        break;
-      }
-
-      case 0x07: { // DW_RLE_start_length: start_addr(addr_size), length(ULEB)
-        uint64_t a = e.value0;
-        for (uint8_t i = 0; i < header.addr_size; ++i)
-          out.push_back(static_cast<uint8_t>((a >> (i * 8)) & 0xFF));
-        DebugConvert::encodeULEB128(e.value1, out);
-        break;
-      }
-
-      default:
-        std::cerr << "Unknown rnglist kind when writing: 0x" << std::hex
-                  << static_cast<int>(e.kind) << "\n";
-        return;
-      }
-    }
-  }
-
-  // 回填 unit_length（不含自身 4 字节）
-  llvm::support::endian::write32le(out.data() + unit_len_pos,
-                                   static_cast<uint32_t>(out.size() - 4));
-
-  assert(out.size() <= sh_size &&
-         "Rewritten .debug_str_offset larger than original");
-  memcpy(buffer, out.data(), out.size());
+  // std::vector<uint8_t> out;
+  //
+  // // unit_length 占位（DWARF32）
+  // size_t unit_len_pos = out.size();
+  // out.resize(out.size() + 4, 0);
+  //
+  // // header: version, addr_size, seg_size, offset_entry_count
+  // uint8_t b2[2];
+  // llvm::support::endian::write16le(b2, header.version);
+  // out.insert(out.end(), b2, b2 + 2);
+  //
+  // out.push_back(static_cast<uint8_t>(header.addr_size));
+  // out.push_back(static_cast<uint8_t>(header.seg_size));
+  //
+  // uint8_t b4[4];
+  // llvm::support::endian::write32le(b4, header.offset_entry_count);
+  // out.insert(out.end(), b4, b4 + 4);
+  //
+  // // offsets 表
+  // for (uint32_t off : offsets) {
+  //   llvm::support::endian::write32le(b4, off);
+  //   out.insert(out.end(), b4, b4 + 4);
+  // }
+  //
+  // // entries（按解析结果逐条写回）
+  // for (auto &rangeList : rangeLists) {
+  //   for (const auto &e : rangeList.second) {
+  //     out.push_back(static_cast<uint8_t>(e.kind));
+  //
+  //     if (e.kind == 0x00) // DW_RLE_end_of_list
+  //       break;
+  //
+  //     switch (e.kind) {
+  //     case 0x01: // DW_RLE_base_addressx: index (ULEB)
+  //       DebugConvert::encodeULEB128(e.value0, out);
+  //       break;
+  //
+  //     case 0x02: // DW_RLE_startx_endx: start_index(ULEB), end_index(ULEB)
+  //       DebugConvert::encodeULEB128(e.value0, out);
+  //       DebugConvert::encodeULEB128(e.value1, out);
+  //       break;
+  //
+  //     case 0x03: // DW_RLE_startx_length: start_index(ULEB), length(ULEB)
+  //       DebugConvert::encodeULEB128(e.value0, out);
+  //       DebugConvert::encodeULEB128(e.value1, out);
+  //       break;
+  //
+  //     case 0x04: // DW_RLE_offset_pair: start_off(ULEB), end_off(ULEB)
+  //       DebugConvert::encodeULEB128(e.value0, out);
+  //       DebugConvert::encodeULEB128(e.value1, out);
+  //       break;
+  //
+  //     case 0x05: { // DW_RLE_base_address: base_addr (addr_size bytes)
+  //       uint64_t v = e.value0;
+  //       for (uint8_t i = 0; i < header.addr_size; ++i)
+  //         out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
+  //       break;
+  //     }
+  //
+  //     case 0x06: { // DW_RLE_start_end: start_addr(addr_size),
+  //                  // end_addr(addr_size)
+  //       uint64_t a0 = e.value0, a1 = e.value1;
+  //       for (uint8_t i = 0; i < header.addr_size; ++i)
+  //         out.push_back(static_cast<uint8_t>((a0 >> (i * 8)) & 0xFF));
+  //       for (uint8_t i = 0; i < header.addr_size; ++i)
+  //         out.push_back(static_cast<uint8_t>((a1 >> (i * 8)) & 0xFF));
+  //       break;
+  //     }
+  //
+  //     case 0x07: { // DW_RLE_start_length: start_addr(addr_size), length(ULEB)
+  //       uint64_t a = e.value0;
+  //       for (uint8_t i = 0; i < header.addr_size; ++i)
+  //         out.push_back(static_cast<uint8_t>((a >> (i * 8)) & 0xFF));
+  //       DebugConvert::encodeULEB128(e.value1, out);
+  //       break;
+  //     }
+  //
+  //     default:
+  //       std::cerr << "Unknown rnglist kind when writing: 0x" << std::hex
+  //                 << static_cast<int>(e.kind) << "\n";
+  //       return;
+  //     }
+  //   }
+  // }
+  //
+  // // 回填 unit_length（不含自身 4 字节）
+  // llvm::support::endian::write32le(out.data() + unit_len_pos,
+  //                                  static_cast<uint32_t>(out.size() - 4));
+  //
+  // assert(out.size() <= sh_size &&
+  //        "Rewritten .debug_str_offset larger than original");
+  // memcpy(buffer, out.data(), out.size());
 }
 
 } // namespace elf

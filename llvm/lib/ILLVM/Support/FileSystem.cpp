@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -18,19 +18,14 @@ namespace illvm {
 std::string FileSystem::getCurrentPath() {
   llvm::SmallString<256> res;
   const auto ec = llvm::sys::fs::current_path(res);
-  if (ec) {
-    Logger::getInstance().fatal("Error getting current path: " + ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
   return res.str().str();
 }
 
 std::string FileSystem::toAbsPath(const std::string &filepath) {
   llvm::SmallString<256> absolutePath(filepath);
   const auto ec = llvm::sys::fs::make_absolute(absolutePath);
-  if (ec) {
-    Logger::getInstance().fatal("Make absolute error: " + filepath + ": " +
-                                ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
   llvm::sys::path::remove_dots(absolutePath);
   return absolutePath.str().str();
 }
@@ -55,10 +50,7 @@ bool FileSystem::checkFileExists(const std::string &filepath) {
 long long FileSystem::getLastModificationTime(const std::string &filepath) {
   llvm::sys::fs::file_status status;
   const auto ec = llvm::sys::fs::status(filepath, status);
-  if (ec) {
-    Logger::getInstance().fatal("Can not read the status of file " + filepath +
-                                ": " + ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
   const llvm::sys::TimePoint<> time = status.getLastModificationTime();
   const auto duration = time.time_since_epoch();
   const auto milliseconds =
@@ -68,9 +60,7 @@ long long FileSystem::getLastModificationTime(const std::string &filepath) {
 
 std::string FileSystem::readAll(const std::string &filepath) {
   std::ifstream inputFile(filepath);
-  if (!inputFile.is_open()) {
-    Logger::getInstance().fatal("Can not open file " + filepath);
-  }
+  ILLVM_FCHECK(inputFile.is_open(), "Can not open file " + filepath);
 
   std::ostringstream buffer;
   buffer << inputFile.rdbuf();
@@ -83,9 +73,7 @@ std::string FileSystem::readAll(const std::string &filepath) {
 std::vector<std::string> FileSystem::readLines(const std::string &filepath) {
   std::ifstream infile(filepath);
 
-  if (!infile) {
-    Logger::getInstance().fatal("Can not open file " + filepath);
-  }
+  ILLVM_FCHECK(infile, "Can not open file " + filepath);
 
   std::vector<std::string> lines;
   std::string line;
@@ -106,9 +94,7 @@ FileSystem::readFirstNLines(const std::string &filepath, const size_t n) {
   std::vector<std::string> result;
   std::string line;
 
-  if (!file.is_open()) {
-    Logger::getInstance().fatal("Can not open file " + filepath);
-  }
+  ILLVM_FCHECK(file.is_open(), "Can not open file " + filepath);
 
   size_t lineCount = 0;
   while (std::getline(file, line) && lineCount < n) {
@@ -123,8 +109,7 @@ FileSystem::readFirstNLines(const std::string &filepath, const size_t n) {
 bool FileSystem::mkdir(const std::string &dirpath) {
   const std::error_code ec = llvm::sys::fs::create_directory(dirpath, false);
   if (ec) {
-    Logger::getInstance().error("Can not create directory " + dirpath + ": " +
-                                ec.message());
+    ILLVM_WARN(ec.message());
     return false;
   }
   return true;
@@ -134,28 +119,20 @@ void FileSystem::rmFile(const std::string &filepath) {
   if (!checkFileExists(filepath)) {
     return;
   }
-  if (!llvm::sys::fs::is_regular_file(filepath)) {
-    Logger::getInstance().fatal("Only support rm regular file: " + filepath);
-  }
+  ILLVM_FCHECK(llvm::sys::fs::is_regular_file(filepath),
+               "Only support rm regular file: " + filepath);
   const auto ec = llvm::sys::fs::remove(filepath);
-  if (ec) {
-    Logger::getInstance().fatal("Can not remove file " + filepath + ": " +
-                                ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
 }
 
 void FileSystem::rmEmptyDir(const std::string &filepath) {
   if (!checkFileExists(filepath)) {
     return;
   }
-  if (!llvm::sys::fs::is_directory(filepath)) {
-    Logger::getInstance().fatal("Only support rm directory: " + filepath);
-  }
+  ILLVM_FCHECK(llvm::sys::fs::is_directory(filepath),
+               "Only support rm directory: " + filepath);
   const auto ec = llvm::sys::fs::remove_directories(filepath);
-  if (ec) {
-    Logger::getInstance().fatal("Can not remove directory " + filepath + ": " +
-                                ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
 }
 
 void FileSystem::rmDirDFS(const std::string &curDirPath) {
@@ -178,6 +155,8 @@ void FileSystem::rmDirDFS(const std::string &curDirPath) {
     }
   }
 
+  ILLVM_FCHECK(!ec, ec.message());
+
   rmEmptyDir(curDirPath);
 }
 
@@ -185,19 +164,15 @@ void FileSystem::rmDir(const std::string &filepath) {
   if (!checkFileExists(filepath)) {
     return;
   }
-  if (!llvm::sys::fs::is_directory(filepath)) {
-    Logger::getInstance().fatal("Only support rm directory: " + filepath);
-  }
+  ILLVM_FCHECK(llvm::sys::fs::is_directory(filepath),
+               "Only support rm directory: " + filepath);
   rmDirDFS(filepath);
 }
 
 void FileSystem::mvFile(const std::string &from, const std::string &to) {
   rmFile(to);
   const auto ec = llvm::sys::fs::rename(from, to);
-  if (ec) {
-    Logger::getInstance().fatal("mv " + from + " to " + to +
-                                " failed: " + ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
 }
 
 void FileSystem::mvDirDFS(const std::string &baseFromDirPath,
@@ -206,16 +181,11 @@ void FileSystem::mvDirDFS(const std::string &baseFromDirPath,
   namespace fs = llvm::sys::fs;
   namespace path = llvm::sys::path;
 
-  const auto &logger = Logger::getInstance();
-
   const std::string fromDirPath = linkPath(baseFromDirPath, relDirPath);
   const std::string toDirPath = linkPath(baseToDirPath, relDirPath);
 
   std::error_code ec = fs::create_directories(toDirPath);
-  if (ec) {
-    logger.fatal("Failed to create target directory " + toDirPath + ": " +
-                 ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
 
   for (fs::directory_iterator it(fromDirPath, ec), end; it != end && !ec;
        it.increment(ec)) {
@@ -232,14 +202,14 @@ void FileSystem::mvDirDFS(const std::string &baseFromDirPath,
     }
   }
 
+  ILLVM_FCHECK(!ec, ec.message());
+
   rmEmptyDir(fromDirPath);
 }
 
 void FileSystem::mvDir(const std::string &from, const std::string &to) {
-  if (!checkFileExists(from)) {
-    Logger::getInstance().fatal("mv " + from + " to " + to +
-                                " failed: " + "from does not exist");
-  }
+  ILLVM_FCHECK(checkFileExists(from),
+               "mv " + from + " to " + to + " failed: " + "from does not exist")
   rmDir(to);
   mvDirDFS(from, to);
 }
@@ -247,17 +217,12 @@ void FileSystem::mvDir(const std::string &from, const std::string &to) {
 void FileSystem::cpFile(const std::string &from, const std::string &to) {
   rmFile(to);
   const auto ec = llvm::sys::fs::copy_file(from, to);
-  if (ec) {
-    Logger::getInstance().fatal("cp " + from + " to " + to +
-                                " failed: " + ec.message());
-  }
+  ILLVM_FCHECK(!ec, ec.message());
 }
 
 void FileSystem::saveStr(const std::string &filepath, const std::string &str) {
   std::ofstream ofs(filepath);
-  if (!ofs.is_open()) {
-    Logger::getInstance().fatal("Can not open " + filepath);
-  }
+  ILLVM_FCHECK(ofs.is_open(), "Can not open " + filepath);
   ofs << str;
   ofs.close();
 }
@@ -269,9 +234,7 @@ void FileSystem::saveVector(const std::string &filepath,
     oss << elem << std::endl;
   }
   std::ofstream ofs(filepath);
-  if (!ofs.is_open()) {
-    Logger::getInstance().fatal("Can not open " + filepath);
-  }
+  ILLVM_FCHECK(ofs.is_open(), "Can not open " + filepath);
   ofs << oss.str();
   ofs.close();
 }
@@ -284,18 +247,14 @@ void FileSystem::saveSet(const std::string &filepath,
     const std::set<std::string> orderedSet(st.begin(), st.end());
     for (const auto &elem : orderedSet) {
       oss << elem << std::endl;
-      ;
     }
   } else {
     for (const auto &elem : st) {
       oss << elem << std::endl;
-      ;
     }
   }
   std::ofstream ofs(filepath);
-  if (!ofs.is_open()) {
-    Logger::getInstance().fatal("Can not open " + filepath);
-  }
+  ILLVM_FCHECK(ofs.is_open(), "Can not open " + filepath);
   ofs << oss.str();
   ofs.close();
 }

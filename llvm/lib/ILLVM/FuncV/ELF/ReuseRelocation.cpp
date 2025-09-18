@@ -1,16 +1,15 @@
 #include "illvm/FuncV/ELF/ReuseRelocation.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
-std::shared_ptr<Relocation> ReuseRelocation::createNewRelaEntry(
+llvm::Expected<std::shared_ptr<Relocation>> ReuseRelocation::createNewRelaEntry(
     const std::shared_ptr<Relocation> &oldRelaEntry,
     const std::unordered_map<std::string, std::weak_ptr<ReuseNode>>
         &dependencies) {
-  const auto &logger = Logger::getInstance();
   llvm::object::ELF64LE::Rela rela;
   rela.r_offset = 0;
   rela.r_info = oldRelaEntry->getRInfo();
@@ -27,20 +26,17 @@ std::shared_ptr<Relocation> ReuseRelocation::createNewRelaEntry(
   const auto oldSymbol = oldRelaEntry->getSym();
   const auto oldName = oldSymbol->getNameValue();
   const auto it = dependencies.find(oldName);
-  logger.assertTrue(it != dependencies.end(),
-                    "ReuseRelocation::createNewRelaEntry: can not find old "
-                    "symbol in dependencies");
+  ILLVM_ECHECK(it != dependencies.end(), "");
   const auto targetReuseNode = it->second;
   const auto targetSymbol = targetReuseNode.lock()->getNewSymbol();
-  logger.assertTrue(targetSymbol != nullptr,
-                    "ReuseRelocation::createNewRelaEntry: new target symbol "
-                    "should not be nullptr");
+  ILLVM_ECHECK(targetSymbol != nullptr, "");
   newRelaEntry->setSym(targetSymbol);
 
   return newRelaEntry;
 }
 
-std::shared_ptr<RelocationSection> ReuseRelocation::createNewRelaSection(
+llvm::Expected<std::shared_ptr<RelocationSection>>
+ReuseRelocation::createNewRelaSection(
     const std::shared_ptr<ReuseNode> &reuseNode, ObjFile &newObjFile,
     const std::shared_ptr<Section> &newSection,
     const std::shared_ptr<RelocationSection> &oldRelocationSection) {
@@ -59,8 +55,11 @@ std::shared_ptr<RelocationSection> ReuseRelocation::createNewRelaSection(
   shdr.sh_entsize = oldRelocationSection->getEntSize();
 
   // Create new relocation section.
-  const auto newRelocationSection =
-      std::make_shared<RelocationSection>(&shdr, nullptr);
+  std::shared_ptr<RelocationSection> newRelocationSection;
+  if (auto err = RelocationSection::Create(&shdr, nullptr)
+                     .moveInto(newRelocationSection)) {
+    return err;
+  }
 
   // Create new idx ref.
   newRelocationSection->setIdx(
@@ -80,7 +79,11 @@ std::shared_ptr<RelocationSection> ReuseRelocation::createNewRelaSection(
   const auto &dependencies = reuseNode->getDependencies();
   const auto &oldRelaEntries = oldRelocationSection->getRelocations();
   for (const auto &oldRelaEntry : oldRelaEntries) {
-    const auto newRelaEntry = createNewRelaEntry(oldRelaEntry, dependencies);
+    std::shared_ptr<Relocation> newRelaEntry;
+    if (auto err = createNewRelaEntry(oldRelaEntry, dependencies)
+                       .moveInto(newRelaEntry)) {
+      return err;
+    }
     newRelocationSection->push_back(newRelaEntry);
   }
 
@@ -89,23 +92,27 @@ std::shared_ptr<RelocationSection> ReuseRelocation::createNewRelaSection(
   return newRelocationSection;
 }
 
-void ReuseRelocation::reuseCIERelaEntries(
+llvm::Error ReuseRelocation::reuseCIERelaEntries(
     const std::shared_ptr<ReuseNode> &reuseNode, ObjFile &newObjFile,
     const std::shared_ptr<CFI> &newCFI, const std::shared_ptr<CFI> &oldCFI) {
   const auto &dependencies = reuseNode->getDependencies();
 
   const auto oldRelaEntries = oldCFI->getCIE()->getRelaEntries();
   for (const auto &oldRelaEntry : oldRelaEntries) {
-    const auto newRelaEntry = createNewRelaEntry(oldRelaEntry, dependencies);
+    std::shared_ptr<Relocation> newRelaEntry;
+    if (auto err = createNewRelaEntry(oldRelaEntry, dependencies)
+                       .moveInto(newRelaEntry)) {
+      return err;
+    }
     newCFI->getCIE()->addRelaEntry(newRelaEntry);
     newObjFile.getRelaEhFrame()->push_back(newRelaEntry);
   }
+  return llvm::Error::success();
 }
 
-void ReuseRelocation::reuseFDERelaEntries(
+llvm::Error ReuseRelocation::reuseFDERelaEntries(
     const std::shared_ptr<ReuseNode> &reuseNode, ObjFile &newObjFile,
     const std::shared_ptr<FDE> &newFDE, const std::shared_ptr<FDE> &oldFDE) {
-  const auto &logger = Logger::getInstance();
   // (1) Handle PCBegin.
   const auto oldPCBeginRelaEntry = oldFDE->getPCBeginRelaEntry();
   if (oldPCBeginRelaEntry != nullptr) {
@@ -123,9 +130,7 @@ void ReuseRelocation::reuseFDERelaEntries(
 
     // Update symbol.
     const auto targetSymbol = reuseNode->getNewSymbol();
-    logger.assertTrue(targetSymbol != nullptr,
-                      "ReuseRelocation::reuseFDERelaEntries: new target symbol "
-                      "should not be nullptr");
+    ILLVM_ECHECK(targetSymbol != nullptr, "");
     newPCBeginRelaEntry->setSym(targetSymbol);
 
     newFDE->setPCBeginRelaEntry(newPCBeginRelaEntry);
@@ -137,15 +142,18 @@ void ReuseRelocation::reuseFDERelaEntries(
 
   const auto oldRelaEntries = oldFDE->getOtherRelaEntries();
   for (const auto &oldRelaEntry : oldRelaEntries) {
-    const auto newRelaEntry = createNewRelaEntry(oldRelaEntry, dependencies);
-
+    std::shared_ptr<Relocation> newRelaEntry;
+    if (auto err = createNewRelaEntry(oldRelaEntry, dependencies)
+                       .moveInto(newRelaEntry)) {
+      return err;
+    }
     newFDE->addOtherRelaEntry(newRelaEntry);
     newObjFile.getRelaEhFrame()->push_back(newRelaEntry);
   }
+  return llvm::Error::success();
 }
 
-void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
-  const auto &logger = Logger::getInstance();
+llvm::Error ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
   const auto &funcVReuseNodes = bdg.getFuncVReuseNodes();
 
   // Reuse rela sections.
@@ -174,11 +182,13 @@ void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
     }
 
     const auto newSection = reuseNode->getNewSection();
-    logger.assertTrue(
-        newSection != nullptr,
-        "ReuseRelocation::run: new section should not be nullptr");
-    const auto newRelaSection =
-        createNewRelaSection(reuseNode, newObjFile, newSection, oldRelaSection);
+    ILLVM_ECHECK(newSection != nullptr, "");
+    std::shared_ptr<RelocationSection> newRelaSection;
+    if (auto err = createNewRelaSection(reuseNode, newObjFile, newSection,
+                                        oldRelaSection)
+                       .moveInto(newRelaSection)) {
+      return err;
+    }
     reuseNode->setNewRelaSection(newRelaSection);
     visited.emplace(oldRelaSection, newRelaSection);
   }
@@ -197,7 +207,10 @@ void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
     }
 
     if (visitedCFI.emplace(oldCFI).second) {
-      reuseCIERelaEntries(reuseNode, newObjFile, newCFI, oldCFI);
+      if (auto err =
+              reuseCIERelaEntries(reuseNode, newObjFile, newCFI, oldCFI)) {
+        return err;
+      }
     }
 
     const auto &oldFDE = reuseNode->getOldFDE();
@@ -207,9 +220,13 @@ void ReuseRelocation::run(ObjFile &newObjFile, const BDG &bdg) {
     }
 
     if (visitedFDE.emplace(oldFDE).second) {
-      reuseFDERelaEntries(reuseNode, newObjFile, newFDE, oldFDE);
+      if (auto err =
+              reuseFDERelaEntries(reuseNode, newObjFile, newFDE, oldFDE)) {
+        return err;
+      }
     }
   }
+  return llvm::Error::success();
 }
 
 } // namespace elf

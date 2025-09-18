@@ -2,8 +2,8 @@
 
 #include "iclang/ASTSupport/ASTGlobal.h"
 #include "iclang/FuncX/ReusableInstAnalysis.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/FileSystem.h"
-#include "illvm/Support/Logger.h"
 #include "illvm/Support/Strings.h"
 
 namespace iclang {
@@ -115,8 +115,8 @@ void IncCC1Driver::run(clang::Sema *sema) {
 
   const auto &global = Global::getInstance();
 
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() == IClangMode::IncMode,
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::IncMode,
                       "expected IncMode");
 
   auto &astGlobal = ASTGlobal::getInstance();
@@ -125,8 +125,8 @@ void IncCC1Driver::run(clang::Sema *sema) {
   auto astMetaData =
       std::static_pointer_cast<IncASTMetaData>(astGlobal.getASTMetaData());
 
-  logger.assertTrue(metaData != nullptr, "IncMetaData convert failed");
-  logger.assertTrue(astMetaData != nullptr, "IncASTMetaData convert failed");
+  ILLVM_FCHECK(metaData != nullptr, "IncMetaData convert failed");
+  ILLVM_FCHECK(astMetaData != nullptr, "IncASTMetaData convert failed");
 
   runBase(sema, metaData, nullptr, astGlobal);
 }
@@ -136,8 +136,8 @@ void IncTestCC1Driver::run(clang::Sema *sema) {
 
   const auto &global = Global::getInstance();
 
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() ==
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() ==
                         IClangMode::IncTestMode,
                     "expected IncTestTestMode");
 
@@ -148,8 +148,8 @@ void IncTestCC1Driver::run(clang::Sema *sema) {
   auto astMetaData =
       std::static_pointer_cast<IncTestASTMetaData>(astGlobal.getASTMetaData());
 
-  logger.assertTrue(metaData != nullptr, "IncTestMetaData convert failed");
-  logger.assertTrue(astMetaData != nullptr,
+  ILLVM_FCHECK(metaData != nullptr, "IncTestMetaData convert failed");
+  ILLVM_FCHECK(astMetaData != nullptr,
                     "IncTestASTMetaData convert failed");
 
   runBase(sema, metaData, metaData, astGlobal);

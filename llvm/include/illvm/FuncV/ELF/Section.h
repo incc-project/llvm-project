@@ -58,7 +58,6 @@ protected:
   // update while writing.
   std::shared_ptr<IdxRef> idx;
 
-public:
   Section(const SectionType _type, const uint32_t _sh_name,
           const std::shared_ptr<StrRef> &_name, const uint32_t _sh_type,
           const uint64_t _sh_flags, const uint64_t _sh_addr,
@@ -80,6 +79,7 @@ public:
                 nullptr, shdr->sh_info, nullptr, shdr->sh_addralign,
                 shdr->sh_entsize, _data, nullptr) {}
 
+public:
   virtual ~Section() = default;
 
   SectionType getType() const { return type; }
@@ -158,9 +158,21 @@ public:
 
 class OrdinarySection final : public Section {
 private:
-public:
-  OrdinarySection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data)
+  OrdinarySection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                  llvm::Error &err)
       : Section(SectionType::Ordinary, shdr, _data) {}
+
+public:
+  static llvm::Expected<std::shared_ptr<OrdinarySection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section =
+        std::shared_ptr<OrdinarySection>(new OrdinarySection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 };
 
 } // namespace elf

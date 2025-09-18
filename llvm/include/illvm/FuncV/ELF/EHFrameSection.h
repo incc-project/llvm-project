@@ -35,8 +35,20 @@ private:
 
   void adjustRelativeROffset() const;
 
+  EhFrameSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                 llvm::Error &err);
+
 public:
-  EhFrameSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+  static llvm::Expected<std::shared_ptr<EhFrameSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section =
+        std::shared_ptr<EhFrameSection>(new EhFrameSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void
   parseReferences(const std::shared_ptr<RelocationSection> &relaEhFrame) const;

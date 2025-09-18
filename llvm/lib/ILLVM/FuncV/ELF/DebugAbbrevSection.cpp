@@ -9,17 +9,15 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 DebugAbbrevSection::DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                       const char *_data)
+                                       const char *_data, llvm::Error &err)
     : Section(SectionType::DebugAbbrev, shdr, _data) {
-  const auto &logger = Logger::getInstance();
-
   // Ref: 7.5.3
   const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *end = start + sh_size;
@@ -34,23 +32,23 @@ DebugAbbrevSection::DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
   while (p < end) {
     AbbreviationDecl decl;
 
-    decl.code = DebugConvert::decodeULEB128(p, &len, end);
+    decl.code = DebugConvert::decodeULEB128(p, len);
     p += len;
 
     if (decl.code == 0) {
       break;
     }
 
-    decl.tag = DebugConvert::decodeULEB128(p, &len, end);
+    decl.tag = DebugConvert::decodeULEB128(p, len);
     p += len;
 
     memcpy(&decl.hasChildren, p, sizeof(uint8_t));
     p += sizeof(uint8_t);
 
     while (p < end) {
-      const uint64_t attr = DebugConvert::decodeULEB128(p, &len, end);
+      const uint64_t attr = DebugConvert::decodeULEB128(p, len);
       p += len;
-      const uint64_t form = DebugConvert::decodeULEB128(p, &len, end);
+      const uint64_t form = DebugConvert::decodeULEB128(p, len);
       p += len;
       if (attr == 0 && form == 0) {
         break;
@@ -59,15 +57,14 @@ DebugAbbrevSection::DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
       AttributeForm af = {attr, form};
       if (form == 0x21 /* DW_FORM_implicit_const */) {
         // TODO. enum form type.
-        af.implicitConst = DebugConvert::decodeSLEB128(p, &len, end);
+        af.implicitConst = DebugConvert::decodeSLEB128(p, len);
         p += len;
       }
 
       decl.attrForms.push_back(af);
     }
 
-    logger.assertTrue(abbrevTable.size() == decl.code,
-                      "abbrevTable.size() != decl.code");
+    ILLVM_ECHECK_TO(abbrevTable.size() == decl.code, "", err);
 
     abbrevTable.push_back(decl);
   }
@@ -115,7 +112,7 @@ void DebugAbbrevSection::writeDataTo(char *buffer) {
     out += DebugConvert::encodeULEB128(0, out);
     out += DebugConvert::encodeULEB128(0, out);
   }
-  out += DebugConvert::encodeULEB128(0, out);
+  DebugConvert::encodeULEB128(0, out);
 }
 
 // Get abbreviation declaration by offset and code

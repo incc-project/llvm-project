@@ -9,23 +9,35 @@ namespace illvm {
 namespace funcv {
 namespace elf {
 
-void Reuse::run() {
+llvm::Error Reuse::run() {
   // (1) Build BDG.
   BDG bdg;
-  bdg.build(oldObjFile, newObjFile);
+  if (auto err = bdg.build(oldObjFile, newObjFile)) {
+    return err;
+  }
   bdg.propagation(funcXSet);
 
   // (2) Reuse sections.
-  ReuseSection::run(newObjFile, bdg);
+  if (auto err = ReuseSection::run(newObjFile, bdg)) {
+    return err;
+  }
 
   // (3) Reuse symbols.
-  ReuseSymbol::run(newObjFile, bdg);
+  if (auto err = ReuseSymbol::run(newObjFile, bdg)) {
+    return err;
+  }
 
   // (4) Reuse eh_frame.
-  ReuseEhFrame::run(newObjFile, bdg);
+  if (auto err = ReuseEhFrame::run(newObjFile, bdg)) {
+    return err;
+  }
 
   // (5) Reuse relocations.
-  ReuseRelocation::run(newObjFile, bdg);
+  if (auto err = ReuseRelocation::run(newObjFile, bdg)) {
+    return err;
+  }
+
+  return llvm::Error::success();
 }
 
 } // namespace elf

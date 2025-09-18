@@ -26,8 +26,20 @@ class GroupSection final : public Section {
 private:
   std::vector<std::shared_ptr<Section>> sections;
 
+  GroupSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, llvm::Error &err);
+
 public:
-  GroupSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+
+  static llvm::Expected<std::shared_ptr<GroupSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section =
+        std::shared_ptr<GroupSection>(new GroupSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void
   parseReferences(const std::vector<std::shared_ptr<Section>> &allSections);

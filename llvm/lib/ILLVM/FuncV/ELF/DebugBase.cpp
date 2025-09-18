@@ -1,10 +1,9 @@
 #include "illvm/FuncV/ELF/DebugBase.h"
 
-#include <cstdint>
 #include <iomanip>
 #include <sstream>
 
-#include "llvm/Support/raw_ostream.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -584,129 +583,28 @@ std::string DebugConvert::intToHex(const uint64_t val, const int width) {
   return oss.str();
 }
 
-// Ref: llvm/include/llvm/Support/LEB128.h
-uint64_t DebugConvert::decodeULEB128(const uint8_t *p, unsigned *n,
-                                     const uint8_t *end, const char **error) {
-  const uint8_t *orig_p = p;
-  uint64_t Value = 0;
-  unsigned Shift = 0;
-  do {
-    if (p == end) {
-      if (error)
-        *error = "malformed uleb128, extends past end";
-      Value = 0;
-      break;
-    }
-    const uint64_t Slice = *p & 0x7f;
+uint64_t DebugConvert::decodeULEB128(const uint8_t *p, unsigned &len) {
+  const char *err = nullptr;
 
-    if (Shift >= 63 && ((Shift == 63 && (Slice << Shift >> Shift) != Slice) ||
-                        (Shift > 63 && Slice != 0))) {
-      if (error)
-        *error = "uleb128 too big for uint64";
-      Value = 0;
-      break;
-    }
-    Value += Slice << Shift;
-    Shift += 7;
-  } while (*p++ >= 128);
-  if (n)
-    *n = static_cast<unsigned>(p - orig_p);
-  return Value;
+  const uint64_t val = llvm::decodeULEB128(p, &len, nullptr, &err);
+  ILLVM_FCHECK(err == nullptr, err);
+  return val;
 }
 
-int64_t DebugConvert::decodeSLEB128(const uint8_t *p, unsigned *n,
-                                    const uint8_t *end, const char **error) {
-  const uint8_t *orig_p = p;
-  int64_t Value = 0;
-  unsigned Shift = 0;
-  uint8_t Byte;
-  do {
-    if (p == end) {
-      if (error)
-        *error = "malformed sleb128, extends past end";
-      if (n)
-        *n = static_cast<unsigned>(p - orig_p);
-      return 0;
-    }
-    Byte = *p;
-    const uint64_t Slice = Byte & 0x7f;
-    if (Shift >= 63 && ((Shift == 63 && Slice != 0 && Slice != 0x7f) ||
-                        (Shift > 63 && Slice != (Value < 0 ? 0x7f : 0x00)))) {
-      if (error)
-        *error = "sleb128 too big for int64";
-      if (n)
-        *n = static_cast<unsigned>(p - orig_p);
-      return 0;
-    }
-    Value |= Slice << Shift;
-    Shift += 7;
-    ++p;
-  } while (Byte >= 128);
-  // Sign extend negative numbers if needed.
-  if (Shift < 64 && (Byte & 0x40))
-    Value |= UINT64_MAX << Shift;
-  if (n)
-    *n = static_cast<unsigned>(p - orig_p);
-  return Value;
+int64_t DebugConvert::decodeSLEB128(const uint8_t *p, unsigned &len) {
+  const char *err = nullptr;
+
+  const int64_t val = llvm::decodeSLEB128(p, &len, nullptr, &err);
+  ILLVM_FCHECK(err == nullptr, err);
+  return val;
 }
 
-unsigned DebugConvert::encodeULEB128(uint64_t Value, uint8_t *p,
-                                     const unsigned PadTo) {
-  const uint8_t *orig_p = p;
-  unsigned Count = 0;
-  do {
-    uint8_t Byte = Value & 0x7f;
-    Value >>= 7;
-    Count++;
-    if (Value != 0 || Count < PadTo)
-      Byte |= 0x80;
-    *p++ = Byte;
-  } while (Value != 0);
-  if (Count < PadTo) {
-    for (; Count < PadTo - 1; ++Count)
-      *p++ = '\x80';
-    *p++ = '\x00';
-  }
-  return static_cast<unsigned>(p - orig_p);
+unsigned DebugConvert::encodeULEB128(const uint64_t val, uint8_t *p) {
+  return llvm::encodeULEB128(val, p);
 }
 
-unsigned DebugConvert::encodeSLEB128(int64_t Value, uint8_t *p,
-                                     const unsigned PadTo) {
-  const uint8_t *orig_p = p;
-  unsigned Count = 0;
-  bool More;
-  do {
-    uint8_t Byte = Value & 0x7f;
-    Value >>= 7;
-    More = !((((Value == 0) && ((Byte & 0x40) == 0)) ||
-              ((Value == -1) && ((Byte & 0x40) != 0))));
-    Count++;
-    if (More || Count < PadTo)
-      Byte |= 0x80;
-    *p++ = Byte;
-  } while (More);
-  if (Count < PadTo) {
-    const uint8_t PadValue = Value < 0 ? 0x7f : 0x00;
-    for (; Count < PadTo - 1; ++Count)
-      *p++ = (PadValue | 0x80);
-    *p++ = PadValue;
-  }
-  return static_cast<unsigned>(p - orig_p);
-}
-
-void DebugConvert::encodeULEB128(const uint64_t Value,
-                                 std::vector<uint8_t> &out,
-                                 const unsigned PadTo) {
-  uint8_t buf[16];
-  const unsigned len = encodeULEB128(Value, buf, PadTo);
-  out.insert(out.end(), buf, buf + len);
-}
-
-void DebugConvert::encodeSLEB128(const int64_t Value, std::vector<uint8_t> &out,
-                                 const unsigned PadTo) {
-  uint8_t buf[16];
-  const unsigned len = encodeSLEB128(Value, buf, PadTo);
-  out.insert(out.end(), buf, buf + len);
+unsigned DebugConvert::encodeSLEB128(const int64_t val, uint8_t *p) {
+  return llvm::encodeSLEB128(val, p);
 }
 
 } // namespace elf

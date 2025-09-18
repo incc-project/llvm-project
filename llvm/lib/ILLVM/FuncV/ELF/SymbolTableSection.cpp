@@ -3,23 +3,18 @@
 #include <iomanip>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 SymtabShndxSection::SymtabShndxSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                       const char *_data)
+                                       const char *_data, llvm::Error &err)
     : Section(SectionType::SymTabShNdx, shdr, _data) {
-  const auto &logger = Logger::getInstance();
-
   // Refer to llvm/include/llvm/Object/ELF.h::ELFFile::getSHNDXTable
-  logger.assertTrue(shdr->sh_entsize == sizeof(llvm::object::ELF64LE::Word),
-                    "Invalid symtab shndx: shdr->sh_entsize != sizeof(Word)");
-  logger.assertTrue(
-      shdr->sh_size % shdr->sh_entsize == 0,
-      "Invalid symtab shndx: shdr->sh_size % shdr->sh_entsize != 0");
+  ILLVM_FCHECK(shdr->sh_entsize == sizeof(llvm::object::ELF64LE::Word), "");
+  ILLVM_FCHECK(shdr->sh_size % shdr->sh_entsize == 0, "");
   const size_t symNum = shdr->sh_size / shdr->sh_entsize;
   originalIndexes.reserve(symNum);
   for (size_t i = 0; i < symNum; i++) {
@@ -44,17 +39,11 @@ void SymtabShndxSection::dumpData(std::ostream &oss) const {
 }
 
 SymbolTableSection::SymbolTableSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                       const char *_data)
+                                       const char *_data, llvm::Error &err)
     : Section(SectionType::SymTab, shdr, _data), symtabShndx(nullptr),
       localSymNum(0) {
-  const auto &logger = Logger::getInstance();
-
-  logger.assertTrue(
-      shdr->sh_entsize == sizeof(Elf_Sym),
-      "Invalid symbol table: shdr->sh_entsize != sizeof(Elf_Sym)");
-  logger.assertTrue(
-      shdr->sh_size % shdr->sh_entsize == 0,
-      "Invalid symbol table: shdr->sh_size % shdr->sh_entsize != 0");
+  ILLVM_FCHECK(shdr->sh_entsize == sizeof(Elf_Sym), "");
+  ILLVM_FCHECK(shdr->sh_size % shdr->sh_entsize == 0, "");
 
   const size_t symNum = shdr->sh_size / shdr->sh_entsize;
   symbols.reserve(symNum);
@@ -70,8 +59,6 @@ SymbolTableSection::SymbolTableSection(const llvm::object::ELF64LE::Shdr *shdr,
 void SymbolTableSection::parseReferences(
     const std::vector<std::shared_ptr<Section>> &sections,
     const std::shared_ptr<StringTableSection> &strTab) const {
-  auto &logger = Logger::getInstance();
-
   for (size_t i = 0; i < symbols.size(); i++) {
     const auto symbol = symbols[i];
     // Name offset -> strRef.
@@ -87,8 +74,7 @@ void SymbolTableSection::parseReferences(
     } else {
       uint64_t secIdx = 0;
       if (shndx == llvm::ELF::SHN_XINDEX) {
-        logger.assertTrue(symtabShndx != nullptr,
-                          "symtabShndx should not be nullptr");
+        ILLVM_FCHECK(symtabShndx != nullptr, "");
         secIdx = symtabShndx->originalIndexes[i];
       } else {
         secIdx = shndx;

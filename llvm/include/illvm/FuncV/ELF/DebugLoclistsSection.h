@@ -29,9 +29,21 @@ private:
 
   std::vector<LocEntry> entries;
 
-public:
   DebugLoclistsSection(const llvm::object::ELF64LE::Shdr *shdr,
-                       const char *_data);
+                       const char *_data, llvm::Error &err);
+
+public:
+
+  static llvm::Expected<std::shared_ptr<DebugLoclistsSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugLoclistsSection>(
+        new DebugLoclistsSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void writeDataTo(char *buffer) override;
 

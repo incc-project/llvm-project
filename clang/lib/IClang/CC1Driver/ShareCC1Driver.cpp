@@ -1,18 +1,16 @@
 #include "iclang/CC1Driver/ShareCC1Driver.h"
 
 #include "iclang/FuncX/RefSymbolAnalysis.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/Interval.h"
-#include "illvm/Support/Logger.h"
 
 namespace iclang {
 
 void ShareTestCC1Driver::run() {
-  auto &logger = illvm::Logger::getInstance();
-
   auto &global = Global::getInstance();
 
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() ==
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() ==
                         IClangMode::ShareTestMode,
                     "expected ShareTestMode");
 
@@ -24,8 +22,8 @@ void ShareTestCC1Driver::run() {
   auto astMetaData = std::static_pointer_cast<ShareTestASTMetaData>(
       astGlobal.getASTMetaData());
 
-  logger.assertTrue(metaData != nullptr, "ShareTestMetaData convert failed");
-  logger.assertTrue(astMetaData != nullptr,
+  ILLVM_FCHECK(metaData != nullptr, "ShareTestMetaData convert failed");
+  ILLVM_FCHECK(astMetaData != nullptr,
                     "ShareTestASTMetaData convert failed");
 
   if (!metaData->enableRefedSymbolAnalysisFlag) {

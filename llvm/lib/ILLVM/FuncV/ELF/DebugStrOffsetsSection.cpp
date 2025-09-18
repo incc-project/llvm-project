@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -17,24 +17,21 @@ namespace elf {
 
 DebugStrOffsetsSection::DebugStrOffsetsSection(
     const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
-    const std::shared_ptr<DebugStrSection> &debugStrSection)
+    const std::shared_ptr<DebugStrSection> &debugStrSection, llvm::Error &err)
     : Section(SectionType::DebugStrOffsets, shdr, _data) {
   // Ref 7.26
-  auto &logger = Logger::getInstance();
-
   // Read header.
-  logger.assertTrue(sizeof(StringOffsetsHeader) <= sh_size,
-                    "Can not read string offsets table header");
+  ILLVM_FCHECK(sizeof(StringOffsetsHeader) <= sh_size, "");
+
   const auto *hdr = reinterpret_cast<const StringOffsetsHeader *>(data);
-  logger.assertTrue(hdr->unitLength == sh_size - sizeof(uint32_t),
-                    "Invalid string offsets table size");
+  ILLVM_FCHECK(hdr->unitLength == sh_size - sizeof(uint32_t), "");
+
   header.unitLength = hdr->unitLength;
   header.version = hdr->version;
   header.padding = hdr->padding;
 
-  logger.assertTrue(
-      (sh_size - sizeof(StringOffsetsHeader)) % sizeof(OffsetESType) == 0,
-      "DebugStrOffsetsSection: Invalid offsets");
+  ILLVM_FCHECK(
+      (sh_size - sizeof(StringOffsetsHeader)) % sizeof(OffsetESType) == 0, "");
 
   // Read offsets.
   for (uint64_t i = sizeof(StringOffsetsHeader), idx = 0; i < sh_size;
@@ -52,10 +49,7 @@ DebugStrOffsetsSection::getStrOffsetRef(const uint32_t idx) {
 }
 
 void DebugStrOffsetsSection::layout() {
-  const auto &logger = Logger::getInstance();
   sh_size = sizeof(StringOffsetsHeader) + offsets.size() * sizeof(OffsetESType);
-  logger.assertTrue(sh_size - sizeof(uint32_t) < (1LL << 32),
-                    "DebugStrOffsetsSection::layout: size >= 2^32");
   header.unitLength = sh_size - sizeof(uint32_t);
   for (size_t i = 0; i < offsets.size(); i += 1) {
     offsets[i]->idx->setValue(i);

@@ -1,6 +1,6 @@
 #include "illvm/FuncV/ELF/FuncV.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -59,7 +59,7 @@ ELFKind FuncV::getELFKind(const BinFile &binFile) {
                                             : ELFKind::ELF64BEKind;
 }
 
-std::unordered_set<std::string>
+llvm::Expected<std::unordered_set<std::string>>
 FuncV::onlyLoadSymbolTable(const std::string &objPath) {
   const BinFile binFile(objPath);
 
@@ -74,7 +74,9 @@ FuncV::onlyLoadSymbolTable(const std::string &objPath) {
   ObjFile objFile(binFile);
 
   // Parse ELF header and sections.
-  objFile.init();
+  if (auto err = objFile.init()) {
+    return err;
+  }
 
   // Load symbol table.
   const auto &symbols = objFile.getSymTab()->getSymbols();
@@ -92,7 +94,7 @@ FuncV::onlyLoadSymbolTable(const std::string &objPath) {
   return res;
 }
 
-void FuncV::run(const std::string &oldObjPath, const std::string &newObjPath,
+llvm::Error FuncV::run(const std::string &oldObjPath, const std::string &newObjPath,
                 const std::string &outputPath,
                 const std::unordered_set<std::string> &funcXSet) {
   auto &logger = Logger::getInstance();
@@ -118,16 +120,26 @@ void FuncV::run(const std::string &oldObjPath, const std::string &newObjPath,
   ObjFile newObjFile(newBinFile);
 
   // Parse ELF header and sections.
-  oldObjFile.init();
-  newObjFile.init();
+  if (auto err = oldObjFile.init()) {
+    return err;
+  }
+  if (auto err = newObjFile.init()) {
+    return err;
+  }
 
   auto reuseDriver = Reuse(oldObjFile, newObjFile, funcXSet);
-  reuseDriver.run();
+  if (auto err = reuseDriver.run()) {
+    return err;
+  }
 
   // Reset layout.
-  newObjFile.fini();
+  if (auto err = newObjFile.fini()) {
+    return err;
+  }
 
   newObjFile.save(outputPath);
+
+  return llvm::Error::success();
 }
 
 } // namespace elf

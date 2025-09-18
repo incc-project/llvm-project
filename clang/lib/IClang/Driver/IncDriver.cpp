@@ -1,8 +1,8 @@
 #include "iclang/Driver/IncDriver.h"
 
 #include "illvm/FuncV/ELF/FuncV.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/FileSystem.h"
-#include "illvm/Support/Logger.h"
 #include "illvm/Support/Time.h"
 
 namespace iclang {
@@ -32,8 +32,7 @@ checkArgs(const llvm::SmallVector<const char *, 128> &originalArgv) {
       return false;
     }
     if (isOptOption(opt)) {
-      illvm::Logger::getInstance().warning(
-          "Please ensure that IClang is only enabled under -O0");
+      ILLVM_WARN("Please ensure that IClang is only enabled under -O0");
       return false;
     }
   }
@@ -86,8 +85,6 @@ static bool init(Global &global, const std::shared_ptr<IncMetaData> &metaData,
 // according to the previous compilation metadata.
 static bool calCanInc(const Global &global,
                       const std::shared_ptr<IncMetaData> &metaData) {
-  const auto &logger = illvm::Logger::getInstance();
-
   // (1) .iclang/compile.json exits.
   if (!illvm::FileSystem::checkFileExists(metaData->compileJsonPath[PrevDir])) {
     metaData->cannotIncReason = "prev compile.json does not exist";
@@ -113,7 +110,7 @@ static bool calCanInc(const Global &global,
   const auto prevMetaData = std::static_pointer_cast<IncMetaData>(
       Global::loadMetaDataFromFile(metaData->compileJsonPath[PrevDir],
                                    global.getConfig().getIClangMode()));
-  logger.assertTrue(prevMetaData != nullptr, "Parse prev compile.json error");
+  ILLVM_FCHECK(prevMetaData != nullptr, "Parse prev compile.json error");
   if (prevMetaData->originalCommand != metaData->originalCommand) {
     metaData->cannotIncReason = "compilation command has changed";
     return false;
@@ -171,8 +168,6 @@ static void
 buildCache(Global &global, const std::shared_ptr<IncMetaData> &metaData,
            const clang::driver::Driver &clangDriver,
            const llvm::SmallVector<const char *, 128> &originalArgv) {
-  const auto &logger = illvm::Logger::getInstance();
-
   metaData->skipTopIncludeRegionFlag = true;
 
   if (illvm::FileSystem::checkFileExists(metaData->cacheHeaderPath[PrevDir]) &&
@@ -182,9 +177,8 @@ buildCache(Global &global, const std::shared_ptr<IncMetaData> &metaData,
 
   illvm::FileSystem::saveVector(metaData->cacheHeaderPath[PrevDir],
                                 metaData->topIncludeRegion);
-  if (cacheCompile(global, metaData, clangDriver, originalArgv) != 0) {
-    logger.fatal("Build cache failed");
-  }
+  ILLVM_FCHECK(cacheCompile(global, metaData, clangDriver, originalArgv) == 0,
+               "Build cache failed");
 }
 
 static int
@@ -210,8 +204,11 @@ static void funcv(const std::shared_ptr<IncMetaData> &metaData,
   if (testMetaData != nullptr) {
     illvm::FileSystem::cpFile(metaData->outputPath, testMetaData->partialOPath);
   }
-  illvm::funcv::elf::FuncV::run(metaData->prevOPath, metaData->outputPath,
-                                metaData->outputPath, metaData->funcXSet);
+  if (auto err = illvm::funcv::elf::FuncV::run(
+          metaData->prevOPath, metaData->outputPath, metaData->outputPath,
+          metaData->funcXSet)) {
+    ILLVM_UNREACHABLE("TODO");
+  }
   if (testMetaData != nullptr) {
     illvm::FileSystem::cpFile(metaData->outputPath, testMetaData->outputOPath);
   } else {
@@ -240,8 +237,11 @@ static int runBase(Global &global, const std::shared_ptr<IncMetaData> &metaData,
     buildCache(global, metaData, clangDriver, originalArgv);
     // Step4. Load prev binary symbol table (iClangFlag && incFlag).
     illvm::FileSystem::cpFile(metaData->outputPath, metaData->prevOPath);
-    metaData->prevAPIs =
-        illvm::funcv::elf::FuncV::onlyLoadSymbolTable(metaData->prevOPath);
+    if (auto err =
+            illvm::funcv::elf::FuncV::onlyLoadSymbolTable(metaData->prevOPath)
+                .moveInto(metaData->prevAPIs)) {
+      ILLVM_UNREACHABLE("TODO: roll back");
+    }
   }
 
   // Step5. Compilation (iClangFlag).
@@ -279,15 +279,13 @@ static int runBase(Global &global, const std::shared_ptr<IncMetaData> &metaData,
 int IncDriver::run(Global &global,
                    const llvm::SmallVector<const char *, 128> &originalArgv,
                    const clang::driver::Driver &clangDriver) {
-  const auto &logger = illvm::Logger::getInstance();
-
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() == IClangMode::IncMode,
-                    "expected IncMode");
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::IncMode,
+               "expected IncMode");
 
   auto metaData = std::static_pointer_cast<IncMetaData>(global.getMetaData());
 
-  logger.assertTrue(metaData != nullptr, "IncMetaData convert failed");
+  ILLVM_FCHECK(metaData != nullptr, "IncMetaData convert failed");
 
   return runBase(global, metaData, nullptr, originalArgv, clangDriver);
 }
@@ -295,17 +293,14 @@ int IncDriver::run(Global &global,
 int IncTestDriver::run(Global &global,
                        const llvm::SmallVector<const char *, 128> &originalArgv,
                        const clang::driver::Driver &clangDriver) {
-  const auto &logger = illvm::Logger::getInstance();
-
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() ==
-                        IClangMode::IncTestMode,
-                    "expected IncTestMode");
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::IncTestMode,
+               "expected IncTestMode");
 
   auto metaData =
       std::static_pointer_cast<IncTestMetaData>(global.getMetaData());
 
-  logger.assertTrue(metaData != nullptr, "IncTestMetaData convert failed");
+  ILLVM_FCHECK(metaData != nullptr, "IncTestMetaData convert failed");
 
   return runBase(global, metaData, metaData, originalArgv, clangDriver);
 }

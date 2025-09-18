@@ -1,25 +1,23 @@
 #include "illvm/FuncV/ELF/RelocationSection.h"
 
+#include "illvm/Support/Diagnostics.h"
+
 #include <iomanip>
 #include <sstream>
 
 #include "illvm/Support/Logger.h"
+
+#include "llvm/Support/FormatVariadic.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 RelocationSection::RelocationSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                     const char *_data)
+                                     const char *_data, llvm::Error &err)
     : Section(SectionType::RelaTab, shdr, _data) {
-  const auto &logger = Logger::getInstance();
-
-  logger.assertTrue(
-      shdr->sh_entsize == sizeof(Elf_Rela),
-      "Invalid symbol table: shdr->sh_entsize != sizeof(Elf_Rela)");
-  logger.assertTrue(
-      shdr->sh_size % shdr->sh_entsize == 0,
-      "Invalid symbol table: shdr->sh_size % shdr->sh_entsize != 0");
+  ILLVM_FCHECK(shdr->sh_entsize == sizeof(Elf_Rela), "");
+  ILLVM_FCHECK(shdr->sh_size % shdr->sh_entsize == 0, "");
 
   const size_t relocationNum = shdr->sh_size / shdr->sh_entsize;
   relocations.reserve(relocationNum);

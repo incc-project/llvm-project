@@ -1,7 +1,7 @@
 #include "iclang/Driver/DriverBase.h"
 
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/FileSystem.h"
-#include "illvm/Support/Logger.h"
 #include "illvm/Support/Strings.h"
 #include "illvm/Support/Time.h"
 
@@ -226,20 +226,19 @@ void DriverBase::fini(const Global &global) {
 int DriverBase::recover(
     Global &global, const clang::driver::Driver &clangDriver,
     const llvm::SmallVector<const char *, 128> &originalArgv) {
-  const auto &logger = illvm::Logger::getInstance();
   const auto metaData = global.getMetaData();
 
-  logger.error("Compilation error, try rolling back to Clang.");
+  ILLVM_WARN("Compilation error, try rolling back to Clang.");
 
   global.setEnabled(false);
   const int res = clangCompile(clangDriver, originalArgv);
 
   if (res != 0) {
-    logger.error("Clang also encountered compilation errors, "
+    ILLVM_WARN("Clang also encountered compilation errors, "
                  "please check your source code.");
   } else {
     metaData->recoverFlag = true;
-    logger.error("IClang internal error, enable recovery mode, "
+    ILLVM_WARN("IClang internal error, enable recovery mode, "
                  "we will no longer process this file");
   }
   fini(global);

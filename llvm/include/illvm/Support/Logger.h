@@ -44,10 +44,7 @@ public:
 
   __attribute__((noreturn)) void fatal(const std::string &msg) const;
 
-  void assertTrue(const bool expr,
-                                            const std::string &msg) const;
-
-  void writeLog(const std::string &level, const std::string &msg) const;
+  void writeLog(const std::string &msg) const;
 };
 
 } // namespace illvm

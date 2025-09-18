@@ -9,31 +9,26 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 DebugAddrSection::DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                   const char *_data)
+                                   const char *_data, llvm::Error &err)
     : Section(SectionType::DebugAddr, shdr, _data) {
   // Ref 7.27
-  const auto &logger = Logger::getInstance();
-
   // Read header.
-  logger.assertTrue(sizeof(AddrTableHeader) <= sh_size,
-                    "Can not read addr table header");
+  ILLVM_FCHECK(sizeof(AddrTableHeader) <= sh_size, "");
   const auto *hdr = reinterpret_cast<const AddrTableHeader *>(data);
-  logger.assertTrue(hdr->unitLength == sh_size - sizeof(uint32_t),
-                    "Invalid addr table size");
+  ILLVM_FCHECK(hdr->unitLength == sh_size - sizeof(uint32_t), "");
   header.unitLength = hdr->unitLength;
   header.version = hdr->version;
   header.addrSize = hdr->addrSize;
   header.segSize = hdr->segSize;
 
-  logger.assertTrue((sh_size - sizeof(AddrTableHeader)) % header.addrSize == 0,
-                    "DebugAddrSection: Invalid addresses");
+  ILLVM_FCHECK((sh_size - sizeof(AddrTableHeader)) % header.addrSize == 0, "");
 
   for (uint64_t i = sizeof(AddrTableHeader), idx = 0; i < sh_size;
        i += header.addrSize, idx += 1) {
@@ -42,10 +37,8 @@ DebugAddrSection::DebugAddrSection(const llvm::object::ELF64LE::Shdr *shdr,
   }
 }
 
-void DebugAddrSection::parseReferences(
+llvm::Error DebugAddrSection::parseReferences(
     const std::shared_ptr<RelocationSection> &relaSection) const {
-  const auto &logger = Logger::getInstance();
-
   std::unordered_map<uint64_t, size_t> addressMap;
   uint64_t offset = sizeof(AddrTableHeader);
   for (size_t i = 0; i < addresses.size(); i += 1) {
@@ -57,10 +50,10 @@ void DebugAddrSection::parseReferences(
   for (const auto &relaEntry : relaEntries) {
     auto rOffset = relaEntry->getROffset();
     const auto it = addressMap.find(rOffset);
-    logger.assertTrue(it != addressMap.end(),
-                      "Can not match rela.debug_addr and debug_addr");
+    ILLVM_ECHECK(it != addressMap.end(), "");
     addresses[it->second]->relaEntry = relaEntry;
   }
+  return llvm::Error::success();
 }
 
 void DebugAddrSection::layout() {

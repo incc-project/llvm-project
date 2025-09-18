@@ -41,9 +41,21 @@ private:
   CompileUnitHeader header; // Compile unit headers
   DIE root;
 
-public:
   DebugInfoSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
-                   FormValueBaseSections &baseSections);
+                   FormValueBaseSections &baseSections, llvm::Error &err);
+
+public:
+  static llvm::Expected<std::shared_ptr<DebugInfoSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+         FormValueBaseSections &baseSections) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugInfoSection>(
+        new DebugInfoSection(shdr, _data, baseSections, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   static DIE parseDIE(const uint8_t *&p, FormValueBaseSections &baseSections);
 

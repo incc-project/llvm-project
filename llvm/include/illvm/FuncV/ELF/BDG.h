@@ -94,17 +94,17 @@ private:
 
   void handleSymSecDep(const std::shared_ptr<ReuseNode> &reuseNode);
 
-  void handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode);
+  llvm::Error handleRelaDep(const std::shared_ptr<ReuseNode> &reuseNode);
 
   void handleFDEDep(const std::shared_ptr<CIE> &cie,
                     const std::vector<std::shared_ptr<FDE>> &fdes);
 
   void handleEhDep(ObjFile &oldObjFile);
 
-  void buildReuseNodesDependencies(ObjFile &oldObjFile);
+  llvm::Error buildReuseNodesDependencies(ObjFile &oldObjFile);
 
 public:
-  void build(ObjFile &oldObjFile, ObjFile &newObjFile);
+  llvm::Error build(ObjFile &oldObjFile, ObjFile &newObjFile);
 
   void propagation(const std::unordered_set<std::string> &funcXSet);
 

@@ -1,11 +1,11 @@
 #ifndef ILLVM_DEBUGRNGLISTSECTION_H
 #define ILLVM_DEBUGRNGLISTSECTION_H
 
+#include <map>
+
 #include "illvm/FuncV/ELF/DebugAddrSection.h"
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/Section.h"
-
-#include <map>
 
 namespace illvm {
 namespace funcv {
@@ -36,9 +36,21 @@ private:
   uint64_t baseOffset;
   mutable std::unordered_map<uint32_t, uint64_t> contextMap;
 
-public:
   DebugRnglistSection(const llvm::object::ELF64LE::Shdr *shdr,
-                      const char *_data, const DebugAddrSection *addrRef);
+                      const char *_data, const DebugAddrSection *addrRef, llvm::Error &err);
+
+public:
+  static llvm::Expected<std::shared_ptr<DebugRnglistSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+         const DebugAddrSection *addrRef) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugRnglistSection>(
+        new DebugRnglistSection(shdr, _data, addrRef, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void dumpData(std::ostream &oss) const override;
 

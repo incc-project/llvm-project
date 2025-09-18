@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -17,9 +17,8 @@ bool EhFrameSection::loadEntry(uint64_t &offset, uint32_t &length,
   uint64_t actLength = 0;
   length = 0;
   extLength = 0;
-  if (offset + sizeof(uint32_t) > sh_size) {
-    logger.fatal("can not load CIE/FDE length.");
-  }
+  ILLVM_FCHECK(offset + sizeof(uint32_t) <= sh_size,
+               "load CIE/FDE length error");
   memcpy(&length, data + offset, sizeof(uint32_t));
   offset += sizeof(uint32_t);
 
@@ -28,9 +27,8 @@ bool EhFrameSection::loadEntry(uint64_t &offset, uint32_t &length,
   }
 
   if (length == 0xffffffff) {
-    if (offset + sizeof(uint64_t) > sh_size) {
-      logger.fatal("can not load CIE/FDE ext length.");
-    }
+    ILLVM_FCHECK(offset + sizeof(uint32_t) <= sh_size,
+                 "load ext CIE/FDE length error");
     memcpy(&extLength, data + offset, sizeof(uint64_t));
     offset += sizeof(uint64_t);
 
@@ -39,16 +37,12 @@ bool EhFrameSection::loadEntry(uint64_t &offset, uint32_t &length,
     actLength = length;
   }
 
-  if (offset + sizeof(uint32_t) > sh_size) {
-    logger.fatal("can not load CIE/FDE flag.");
-  }
+  ILLVM_FCHECK(offset + sizeof(uint32_t) <= sh_size, "load CIE/FDE flag error");
   memcpy(&entryFlag, data + offset, sizeof(uint32_t));
   offset += sizeof(uint32_t);
   actLength -= sizeof(uint32_t);
 
-  if (offset + actLength > sh_size) {
-    logger.fatal("CIE/FDE data leak.");
-  }
+  ILLVM_FCHECK(offset + actLength <= sh_size, "");
   otherData = data + offset;
   offset += actLength;
 
@@ -132,9 +126,8 @@ void EhFrameSection::adjustRelativeROffset() const {
 }
 
 EhFrameSection::EhFrameSection(const llvm::object::ELF64LE::Shdr *shdr,
-                               const char *_data)
+                               const char *_data, llvm::Error &err)
     : Section(SectionType::EhFrame, shdr, _data) {
-  const auto &logger = Logger::getInstance();
   // ref:
   // https://refspecs.linuxfoundation.org/LSB_3.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html
   uint64_t offset = 0;
@@ -147,9 +140,7 @@ EhFrameSection::EhFrameSection(const llvm::object::ELF64LE::Shdr *shdr,
   if (!loadEntry(offset, length, extLength, entryFlag, otherData)) {
     return;
   }
-  if (entryFlag != 0) {
-    logger.fatal("the first entry of CFI should be CIE.");
-  }
+  ILLVM_FCHECK(entryFlag != 0, "");
   const auto firstCIE =
       std::make_shared<CIE>(length, extLength, entryFlag, otherData);
   auto curCFI = std::make_shared<CFI>(firstCIE);

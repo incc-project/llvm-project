@@ -8,7 +8,7 @@ namespace funcv {
 namespace elf {
 
 StringTableSection::StringTableSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                       const char *_data)
+                                       const char *_data, llvm::Error &err)
     : Section(SectionType::StrTab, shdr, _data) {
   const auto firstStrRef = std::make_shared<StrRef>(data, 0);
   originalIndexes[0] = firstStrRef;

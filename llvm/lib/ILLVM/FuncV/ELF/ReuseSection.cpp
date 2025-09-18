@@ -4,7 +4,7 @@ namespace illvm {
 namespace funcv {
 namespace elf {
 
-std::shared_ptr<Section>
+llvm::Expected<std::shared_ptr<Section>>
 ReuseSection::createNewSection(ObjFile &newObjFile,
                                const std::shared_ptr<Section> &oldSection) {
   using Elf_Shdr = llvm::object::ELF64LE::Shdr;
@@ -24,8 +24,11 @@ ReuseSection::createNewSection(ObjFile &newObjFile,
 
   // Create new section.
   // Set data. (shadow copy)
-  const auto newSection =
-      std::make_shared<OrdinarySection>(&shdr, oldSection->getData());
+  std::shared_ptr<Section> newSection;
+  if (auto err = OrdinarySection::Create(&shdr, oldSection->getData())
+                     .moveInto(newSection)) {
+    return err;
+  }
 
   // Create new idx ref.
   newSection->setIdx(std::make_shared<IdxRef>(newObjFile.getSections().size()));
@@ -39,7 +42,7 @@ ReuseSection::createNewSection(ObjFile &newObjFile,
   return newSection;
 }
 
-void ReuseSection::run(ObjFile &newObjFile, const BDG &bdg) {
+llvm::Error ReuseSection::run(ObjFile &newObjFile, const BDG &bdg) {
   const auto &funcVReuseNodes = bdg.getFuncVReuseNodes();
 
   // Old section -> new section.
@@ -60,10 +63,15 @@ void ReuseSection::run(ObjFile &newObjFile, const BDG &bdg) {
       continue;
     }
 
-    const auto newSection = createNewSection(newObjFile, oldSection);
+    std::shared_ptr<Section> newSection;
+    if (auto err =
+            createNewSection(newObjFile, oldSection).moveInto(newSection)) {
+      return err;
+    }
     reuseNode->setNewSection(newSection);
     visited.emplace(oldSection, newSection);
   }
+  return llvm::Error::success();
 }
 
 } // namespace elf

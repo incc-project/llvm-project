@@ -48,6 +48,7 @@
 #ifndef ILLVM_REFERENCE_H
 #define ILLVM_REFERENCE_H
 
+#include <cstdint>
 #include <string>
 
 namespace illvm {

@@ -1,6 +1,6 @@
 #include "illvm/FuncV/ELF/ReuseEhFrame.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -33,8 +33,7 @@ ReuseEhFrame::createNewFDE(const std::shared_ptr<CFI> &newCFI,
   return newFDE;
 }
 
-void ReuseEhFrame::run(ObjFile &newObjFile, const BDG &bdg) {
-  const auto &logger = Logger::getInstance();
+llvm::Error ReuseEhFrame::run(ObjFile &newObjFile, const BDG &bdg) {
   const auto &funcVReuseNodes = bdg.getFuncVReuseNodes();
 
   // Old CFI -> new CFI.
@@ -67,8 +66,7 @@ void ReuseEhFrame::run(ObjFile &newObjFile, const BDG &bdg) {
 
     // (2) Reuse FDE.
     const auto oldFDE = reuseNode->getOldFDE();
-    logger.assertTrue(oldFDE != nullptr,
-                      "ReuseEhFrame::run: old fde should not be nullptr");
+    ILLVM_ECHECK(oldFDE != nullptr, "");
     if (reuseNode->getNewFDE() == nullptr) {
       const auto fdeIt = visitedFDE.find(oldFDE);
       if (fdeIt != visitedFDE.end()) {
@@ -80,6 +78,7 @@ void ReuseEhFrame::run(ObjFile &newObjFile, const BDG &bdg) {
       }
     }
   }
+  return llvm::Error::success();
 }
 
 } // namespace elf

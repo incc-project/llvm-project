@@ -51,15 +51,27 @@ private:
   std::vector<DebugLineNumberEntry> lineNumberEntries;
   std::vector<DebugLineNumberBlock> lineNumberBlocks;
 
+  DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                   llvm::Error &err);
+
 public:
-  DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+  static llvm::Expected<std::shared_ptr<DebugLineSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugLineSection>(
+        new DebugLineSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
-  // TODO: call in ObjFile.
-  void parseReferences(const std::shared_ptr<RelocationSection> &sec) const;
-
-  void layout() override;
-
-  void fini() override;
+  // // TODO: call in ObjFile.
+  // void parseReferences(const std::shared_ptr<RelocationSection> &sec) const;
+  //
+  // void layout() override;
+  //
+  // void fini() override;
 
   void writeDataTo(char *buffer) override;
 

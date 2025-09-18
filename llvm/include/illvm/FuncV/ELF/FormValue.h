@@ -1,8 +1,5 @@
 #ifndef ILLVM_FORMVALUE_H
 #define ILLVM_FORMVALUE_H
-
-#include "DebugLineStrSection.h"
-
 #include <sstream>
 
 #include "illvm/FuncV/ELF/DebugAbbrevSection.h"
@@ -10,7 +7,10 @@
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/DebugLineStrSection.h"
 #include "illvm/FuncV/ELF/DebugStrOffsetsSection.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/Logger.h"
+
+#include "llvm/Support/FormatVariadic.h"
 
 namespace illvm {
 namespace funcv {
@@ -84,18 +84,15 @@ public:
   virtual void dump(std::ostream &oss) const = 0;
 
   virtual std::string getStringValue() {
-    Logger::getInstance().fatal("getStringValue Unreachable:" +
-                                std::to_string(static_cast<int>(type)));
+    ILLVM_UNREACHABLE("");
   }
 
   virtual uint64_t getUIntegerValue() {
-    Logger::getInstance().fatal("getUIntegerValue Unreachable:" +
-                                    std::to_string(static_cast<int>(type)));
+    ILLVM_UNREACHABLE("");
   }
 
   virtual std::vector<uint8_t> getUIArrayValue() {
-    Logger::getInstance().fatal("getUIArrayValue Unreachable:" +
-                                    std::to_string(static_cast<int>(type)));
+    ILLVM_UNREACHABLE("");
   }
 
   // TODO virtual copy
@@ -137,7 +134,7 @@ public:
   AddrXFormValue() : FormValue(FormType::DW_FORM_addrx) {}
 
   int read(const char *buf) override {
-    idx = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), &len);
+    idx = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), len);
     return len;
   }
 
@@ -202,13 +199,6 @@ public:
     }
   }
 
-  std::string getStringValue() override {
-    Logger::getInstance().fatal("BlockNFormValue::getStringValue unreachable");
-  }
-
-  uint64_t getUIntegerValue() override {
-    Logger::getInstance().fatal("BlockNFormValue::UIntegerValue unreachable");
-  }
 };
 
 class SDataFormValue final : public FormValue {
@@ -219,7 +209,7 @@ public:
   SDataFormValue() : FormValue(FormType::DW_FORM_sdata) {}
 
   int read(const char *buf) override {
-    data = DebugConvert::decodeSLEB128(reinterpret_cast<const uint8_t *>(buf), &len);
+    data = DebugConvert::decodeSLEB128(reinterpret_cast<const uint8_t *>(buf), len);
     return len;
   }
 
@@ -242,7 +232,7 @@ public:
   UDataFormValue() : FormValue(FormType::DW_FORM_udata) {}
 
   int read(const char *buf) override {
-    data = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), &len);
+    data = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), len);
     return len;
   }
 
@@ -406,7 +396,7 @@ public:
   ExprLocFormValue() : FormValue(FormType::DW_FORM_exprloc), n() {}
 
   int read(const char *buf) override {
-    len = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), &n);
+    len = DebugConvert::decodeULEB128(reinterpret_cast<const uint8_t *>(buf), n);
     const auto temp = new uint8_t[len];
     memcpy(temp, buf + n, len);
     data.reserve(len);

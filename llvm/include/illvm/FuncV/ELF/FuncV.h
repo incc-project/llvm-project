@@ -38,12 +38,13 @@ private:
 
 public:
   // Load symbol table for FuncX.
-  static std::unordered_set<std::string>
+  static llvm::Expected<std::unordered_set<std::string>>
   onlyLoadSymbolTable(const std::string &objPath);
 
-  static void run(const std::string &oldObjPath, const std::string &newObjPath,
-                  const std::string &outputPath,
-                  const std::unordered_set<std::string> &funcXSet);
+  static llvm::Error run(const std::string &oldObjPath,
+                         const std::string &newObjPath,
+                         const std::string &outputPath,
+                         const std::unordered_set<std::string> &funcXSet);
 };
 
 } // namespace elf

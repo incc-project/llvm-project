@@ -1,23 +1,20 @@
 #include "illvm/Support/Json.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 
 llvm::json::Object JsonWrapper::loadJson(const std::string &jsonData) {
-  const auto &logger = Logger::getInstance();
-
   auto parseRes = llvm::json::parse(jsonData);
-  if (!parseRes) {
-    logger.fatal("Failed to parse JSON: " +
-                 llvm::toString(parseRes.takeError()));
+  if (auto err = parseRes.takeError()) {
+    ILLVM_UNREACHABLE(llvm::toString(std::move(err)));
   }
 
   if (auto *root = parseRes->getAsObject()) {
     return *root;
   }
 
-  logger.fatal(
+  ILLVM_UNREACHABLE(
       "Failed to parse JSON: Can not convert json data to json object");
 }
 

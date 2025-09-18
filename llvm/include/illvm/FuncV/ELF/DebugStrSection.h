@@ -19,8 +19,20 @@ private:
   // It can only work during parsing.
   std::unordered_map<uint64_t, std::shared_ptr<DebugStrRef>> originalIndexes;
 
+  DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data, llvm::Error &err);
+
 public:
-  DebugStrSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+
+  static llvm::Expected<std::shared_ptr<DebugStrSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section =
+        std::shared_ptr<DebugStrSection>(new DebugStrSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   // TODO: use this function!
   std::shared_ptr<DebugStrRef> parseOriginalIndex(uint64_t strOff);

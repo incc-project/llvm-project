@@ -14,7 +14,7 @@ namespace funcv {
 namespace elf {
 
 DebugArangeSection::DebugArangeSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                       const char *_data)
+                                       const char *_data, llvm::Error &err)
     : Section(SectionType::DebugAranges, shdr, _data) {
   const uint8_t *start = reinterpret_cast<const uint8_t *>(data);
   const uint8_t *end = start + sh_size;

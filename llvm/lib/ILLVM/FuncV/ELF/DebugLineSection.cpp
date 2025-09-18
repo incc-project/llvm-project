@@ -9,20 +9,15 @@
 #include <unordered_set>
 #include <vector>
 
-#include "illvm/Support/Logger.h"
-
-#include "llvm/BinaryFormat/Dwarf.h"
-#include "llvm/Support/LEB128.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
-                                   const char *_data)
+                                   const char *_data, llvm::Error &err)
     : Section(SectionType::DebugLine, shdr, _data) {
-  const auto &logger = Logger::getInstance();
-
   auto buf = reinterpret_cast<const uint8_t *>(data);
   auto *start = buf;
 
@@ -34,8 +29,7 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
   memcpy(&header.version, buf, sizeof(uint16_t));
   buf += sizeof(uint16_t);
   memcpy(&header.address_size, buf, sizeof(uint8_t));
-  logger.assertTrue(header.address_size == sizeof(uint32_t),
-                    "header.address_size != sizeof(uint32_t)!");
+  ILLVM_ECHECK_TO(header.address_size == sizeof(uint32_t), "", err);
   buf += sizeof(uint8_t);
   memcpy(&header.segment_selector_size, buf, sizeof(uint8_t));
   buf += sizeof(uint8_t);
@@ -63,20 +57,17 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
 
   // --- DWARFv5 include_directories_table ---
   unsigned n;
-  header.dir_format_count = DebugConvert::decodeULEB128(buf, &n);
-  logger.assertTrue(header.dir_format_count == 1,
-                      "header.dir_format_count != 1");
+  header.dir_format_count = DebugConvert::decodeULEB128(buf, n);
+  ILLVM_ECHECK_TO(header.dir_format_count == 1, "", err);
   buf += n;
-  uint64_t stdContentCode = DebugConvert::decodeULEB128(buf, &n);
-  logger.assertTrue(
-      stdContentCode == static_cast<int>(DW_LNCT_path),
-      "content_type != static_cast<int>(DebugStdContentCode::DW_LNCT_path)");
+  uint64_t stdContentCode = DebugConvert::decodeULEB128(buf, n);
+  ILLVM_ECHECK_TO(stdContentCode == static_cast<int>(DW_LNCT_path), "", err);
   buf += n;
-  uint64_t formId = DebugConvert::decodeULEB128(buf, &n);
+  uint64_t formId = DebugConvert::decodeULEB128(buf, n);
   buf += n;
   header.dir_attr = {stdContentCode, formId};
 
-  header.directory_count = DebugConvert::decodeULEB128(buf, &n);
+  header.directory_count = DebugConvert::decodeULEB128(buf, n);
   buf += n;
   for (uint64_t i = 0; i < header.directory_count; ++i) {
     auto fv = FormValueFactory::createFormValue(header.dir_attr.second);
@@ -84,17 +75,17 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
     header.directories.push_back(fv);
   }
 
-  header.file_name_entry_format_count = DebugConvert::decodeULEB128(buf, &n);
+  header.file_name_entry_format_count = DebugConvert::decodeULEB128(buf, n);
   buf += n;
   for (uint64_t i = 0; i < header.file_name_entry_format_count; ++i) {
-    uint64_t content_type = DebugConvert::decodeULEB128(buf, &n);
+    uint64_t content_type = DebugConvert::decodeULEB128(buf, n);
     buf += n;
-    uint64_t form = DebugConvert::decodeULEB128(buf, &n);
+    uint64_t form = DebugConvert::decodeULEB128(buf, n);
     buf += n;
     header.file_attrs.emplace_back(content_type, form);
   }
 
-  header.file_names_count = DebugConvert::decodeULEB128(buf, &n);
+  header.file_names_count = DebugConvert::decodeULEB128(buf, n);
   buf += n;
   for (uint64_t i = 0; i < header.file_names_count; ++i) {
     LineTableHeader::FileEntry entry;
@@ -111,14 +102,13 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
       } else if (stdContentCode == DW_LNCT_MD5) {
         entry.md5 = fv->getUIArrayValue();
       } else {
-        logger.fatal("Unknown stdContentCode");
+        ILLVM_UNREACHABLE("Unknown stdContentCode");
       }
     }
     header.file_names.push_back(entry);
   }
 
-  logger.assertTrue(buf - start == header.header_length,
-                    "Parse debug line header error");
+  ILLVM_FCHECK(buf - start == header.header_length, "");
 
   // line table program
   DebugLineNumberEntry state;
@@ -146,7 +136,7 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
     }
     // Ext
     if (opcode == 0) {
-      uint64_t len = DebugConvert::decodeULEB128(buf, &n);
+      uint64_t len = DebugConvert::decodeULEB128(buf, n);
       buf += n;
       const uint8_t *ext_end = buf + len;
       uint8_t extOpcode = 0;
@@ -164,11 +154,14 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
         memcpy(&state.address, buf, header.address_size);
         buf += header.address_size;
         break;
-      case DW_LNE_set_discriminator:
-        uint64_t discrim = DebugConvert::decodeULEB128(buf, &n);
+      case DW_LNE_set_discriminator: {
+        uint64_t discrim = DebugConvert::decodeULEB128(buf, n);
         buf += n;
         state.discriminator = discrim;
         break;
+      }
+      default:
+        ILLVM_UNREACHABLE("Unknown ext opcode");
       }
       buf = ext_end;
       continue;
@@ -184,19 +177,19 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
       break;
     case DW_LNS_advance_pc:
       state.address +=
-          DebugConvert::decodeULEB128(buf, &n) * header.min_inst_length;
+          DebugConvert::decodeULEB128(buf, n) * header.min_inst_length;
       buf += n;
       break;
     case DW_LNS_advance_line:
-      state.line += DebugConvert::decodeSLEB128(buf, &n);
+      state.line += DebugConvert::decodeSLEB128(buf, n);
       buf += n;
       break;
     case DW_LNS_set_file:
-      state.file = DebugConvert::decodeULEB128(buf, &n);
+      state.file = DebugConvert::decodeULEB128(buf, n);
       buf += n;
       break;
     case DW_LNS_set_column:
-      state.column = DebugConvert::decodeULEB128(buf, &n);
+      state.column = DebugConvert::decodeULEB128(buf, n);
       buf += n;
       break;
     case DW_LNS_negate_stmt:
@@ -226,11 +219,11 @@ DebugLineSection::DebugLineSection(const llvm::object::ELF64LE::Shdr *shdr,
       state.epilogue_begin = true;
       break;
     case DW_LNS_set_isa:
-      state.isa = DebugConvert::decodeULEB128(buf, &n);
+      state.isa = DebugConvert::decodeULEB128(buf, n);
       buf += n;
       break;
     default:
-      logger.fatal("Unknown line number program opcode");
+      ILLVM_UNREACHABLE("Unknown line number program opcode");
       break;
     }
   }
@@ -312,8 +305,6 @@ void DebugLineSection::dumpData(std::ostream &oss) const {
 
 // TODO: char* -> uint8_t*
 void DebugLineSection::writeDataTo(char *buffer) {
-  const auto &logger = Logger::getInstance();
-
   // --- Header (version, address size, etc) ---
   memcpy(buffer, &header.unit_length, sizeof(uint32_t));
   buffer += sizeof(uint32_t);
@@ -605,7 +596,7 @@ void DebugLineSection::writeDataTo(char *buffer) {
       memcpy(buffer, &tempType, sizeof(uint8_t));
       buffer += sizeof(uint8_t);
     } else {
-      logger.fatal("Buggy special opcode encoding.");
+      ILLVM_UNREACHABLE("Buggy special opcode encoding");
     }
 
     prev.discriminator = 0;

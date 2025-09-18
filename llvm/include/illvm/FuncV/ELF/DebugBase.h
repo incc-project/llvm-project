@@ -8,6 +8,7 @@
 #include "illvm/FuncV/ELF/Reference.h"
 #include "illvm/FuncV/ELF/Relocation.h"
 
+#include "llvm/Support/LEB128.h"
 #include "llvm/Support/Endian.h"
 
 // TODO: check: only support 1 table.
@@ -39,23 +40,13 @@ public:
   static std::string intToHex(uint64_t val, int width);
 
   // Ref: llvm/include/llvm/Support/LEB128.h
-  static uint64_t decodeULEB128(const uint8_t *p, unsigned *n = nullptr,
-                                const uint8_t *end = nullptr,
-                                const char **error = nullptr);
+  static uint64_t decodeULEB128(const uint8_t *p, unsigned &len);
 
-  static int64_t decodeSLEB128(const uint8_t *p, unsigned *n = nullptr,
-                               const uint8_t *end = nullptr,
-                               const char **error = nullptr);
+  static int64_t decodeSLEB128(const uint8_t *p, unsigned &len);
 
-  static unsigned encodeULEB128(uint64_t Value, uint8_t *p, unsigned PadTo = 0);
+  static unsigned encodeULEB128(uint64_t val, uint8_t *p);
 
-  static unsigned encodeSLEB128(int64_t Value, uint8_t *p, unsigned PadTo = 0);
-
-  static void encodeULEB128(uint64_t Value, std::vector<uint8_t> &out,
-                            unsigned PadTo = 0);
-
-  static void encodeSLEB128(int64_t Value, std::vector<uint8_t> &out,
-                            unsigned PadTo = 0);
+  static unsigned encodeSLEB128(int64_t val, uint8_t *p);
 };
 
 // Structure representing a string entry in .debug_str section

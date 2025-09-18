@@ -1,7 +1,7 @@
 #include "iclang/Driver/ShareDriver.h"
 
 #include "illvm/Support/FileSystem.h"
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/Strings.h"
 #include "illvm/Support/Time.h"
 
@@ -83,17 +83,14 @@ int ShareTestDriver::run(
     const Global &global,
     const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {
-  const auto &logger = illvm::Logger::getInstance();
-
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
-  logger.assertTrue(global.getConfig().getIClangMode() ==
-                        IClangMode::ShareTestMode,
-                    "expected ShareTestMode");
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::ShareTestMode,
+               "expected ShareTestMode");
 
   auto metaData =
       std::static_pointer_cast<ShareTestMetaData>(global.getMetaData());
 
-  logger.assertTrue(metaData != nullptr, "ShareTestMetaData convert failed");
+  ILLVM_FCHECK(metaData != nullptr, "ShareTestMetaData convert failed");
 
   configTestPaths(metaData);
 
@@ -134,9 +131,7 @@ int ShareTestDriver::run(
   startTsMs = illvm::Time::currentTsMs();
   metaData->enableRefedSymbolAnalysisFlag = true;
   res = clangEOCompile(metaData, clangDriver, originalArgv);
-  if (res != 0) {
-    logger.fatal("master error!");
-  }
+  ILLVM_FCHECK(res == 0, "master error!");
   metaData->enableRefedSymbolAnalysisFlag = false;
   endTsMs = illvm::Time::currentTsMs();
   metaData->masterTimeMs = endTsMs - startTsMs;
@@ -151,9 +146,7 @@ int ShareTestDriver::run(
   // FileSystem::cpFile(global.ppPath, global.ppSPath);
 
   res = clangESOCompile(metaData, clangDriver, originalArgv);
-  if (res != 0) {
-    logger.fatal("client error!");
-  }
+  ILLVM_FCHECK(res == 0, "client error!");
   endTsMs = illvm::Time::currentTsMs();
   metaData->clientTimeMs = endTsMs - startTsMs;
 

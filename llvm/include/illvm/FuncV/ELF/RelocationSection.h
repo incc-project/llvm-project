@@ -27,8 +27,20 @@ private:
   // index -> relocation entry.
   std::vector<std::shared_ptr<Relocation>> relocations;
 
+  RelocationSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                    llvm::Error &err);
+
 public:
-  RelocationSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data);
+  static llvm::Expected<std::shared_ptr<RelocationSection>>
+  Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<RelocationSection>(
+        new RelocationSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void parseReferences(const std::shared_ptr<SymbolTableSection> &symTab) const;
 

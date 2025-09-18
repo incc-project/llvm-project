@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <sstream>
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace iclang {
 
@@ -88,8 +88,6 @@ llvm::json::Object IncMetaData::serialize() const {
 }
 
 void IncMetaData::deserialize(llvm::json::Object &root) {
-  const auto &logger = illvm::Logger::getInstance();
-
   MetaData::deserialize(root);
 
   incFlag = root["recoverFlag"].getAsBoolean().value();
@@ -99,7 +97,7 @@ void IncMetaData::deserialize(llvm::json::Object &root) {
   funcVTime = root["funcVTime"].getAsInteger().value();
 
   auto *arr = root["topIncludeRegion"].getAsArray();
-  logger.assertTrue(arr != nullptr,
+  ILLVM_FCHECK(arr != nullptr,
                     "Failed to parse JSON: Can not convert topIncludeRegion to "
                     "json array");
 
@@ -109,7 +107,7 @@ void IncMetaData::deserialize(llvm::json::Object &root) {
   }
 
   auto *headerTsObj = root["headerTs"].getAsObject();
-  logger.assertTrue(
+  ILLVM_FCHECK(
       headerTsObj != nullptr,
       "Failed to parse JSON: Can not convert headerTs to json object");
 

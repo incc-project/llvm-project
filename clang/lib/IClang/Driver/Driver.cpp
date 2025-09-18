@@ -6,7 +6,7 @@
 #include "iclang/Driver/ShareDriver.h"
 #include "iclang/Driver/TestDriver.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace iclang {
 
@@ -18,9 +18,7 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
   auto &global = Global::getInstance();
   auto &astGlobal = ASTGlobal::getInstance();
 
-  const auto &logger = illvm::Logger::getInstance();
-
-  logger.assertTrue(global.isEnabled(), "IClang is not enabled");
+  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
 
   if (!DriverBase::init(global, astGlobal, kind, inputInfos, outputFilenames,
                         originalArgv)) {

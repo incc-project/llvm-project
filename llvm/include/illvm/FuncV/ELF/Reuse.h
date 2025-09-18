@@ -34,7 +34,7 @@ public:
         const std::unordered_set<std::string> &_funcXSet)
       : oldObjFile(_oldObjFile), newObjFile(_newObjFile), funcXSet(_funcXSet) {}
 
-  void run();
+  llvm::Error run();
 };
 
 } // namespace elf

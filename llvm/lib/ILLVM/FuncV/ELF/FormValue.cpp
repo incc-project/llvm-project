@@ -1,6 +1,6 @@
 #include "illvm/FuncV/ELF/FormValue.h"
 
-#include "illvm/Support/Logger.h"
+#include "illvm/Support/Diagnostics.h"
 
 namespace illvm {
 namespace funcv {
@@ -35,7 +35,7 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<StringFormValue>();
     break;
   case 9:  // DW_FORM_block
-    logger.fatal("Unsupport DW_FORM_block");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_block");
   case 10: // DW_FORM_block1
     res = std::make_shared<BlockNFormValue>(1);
     break;
@@ -43,7 +43,7 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<DataNFormValue>(1);
     break;
   case 12: // DW_FORM_flag
-    logger.fatal("Unsupport DW_FORM_flag");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_flag");
   case 13: // DW_FORM_sdata
     res = std::make_shared<SDataFormValue>();
     break;
@@ -54,7 +54,7 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<UDataFormValue>();
     break;
   case 16: // DW_FORM_ref_addr
-    logger.fatal("Unsupport DW_FORM_ref_addr");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_ref_addr");
   case 17: // DW_FORM_ref1
     res = std::make_shared<RefNFormValue>(1);
     break;
@@ -68,9 +68,9 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<RefNFormValue>(8);
     break;
   case 21: // DW_FORM_ref_udata
-    logger.fatal("Unsupport DW_FORM_ref_udata");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_ref_udata");
   case 22: // DW_FORM_indirect
-    logger.fatal("Unsupport DW_FORM_indirect");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_indirect");
   case 23: // DW_FORM_sec_offset
     res = std::make_shared<SecOffsetFormValue>();
     break;
@@ -81,14 +81,14 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<FlagPresentFormValue>();
     break;
   case 26: // DW_FORM_strx
-    logger.fatal("Unsupport DW_FORM_strx");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_strx");
   case 27: // DW_FORM_addrx
     res = std::make_shared<AddrXFormValue>();
     break;
   case 28: // DW_FORM_ref_sup4
-    logger.fatal("Unsupport DW_FORM_ref_sup4");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_ref_sup4");
   case 29: // DW_FORM_strp_sup
-    logger.fatal("Unsupport DW_FORM_strp_sup");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_strp_sup");
   case 30: // DW_FORM_data16
     res = std::make_shared<DataNXFormValue>(16);
     break;
@@ -96,18 +96,18 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<LineStrPFormValue>();
     break;
   case 32: // DW_FORM_ref_sig8
-    logger.fatal("Unsupport DW_FORM_ref_sig8");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_ref_sig8");
   case 33: // DW_FORM_implicit_const
     res = std::make_shared<ImplicitConstFormValue>();
     break;
   case 34: // DW_FORM_loclistx
     // TODO: Support
-    logger.fatal("Unsupport DW_FORM_loclistx");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_loclistx");
   case 35: // DW_FORM_rnglistx
     // TODO: Support
-    logger.fatal("Unsupport DW_FORM_rnglistx");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_rnglistx");
   case 36: // DW_FORM_ref_sup8
-    logger.fatal("Unsupport DW_FORM_ref_sup8");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_ref_sup8");
   case 37: // DW_FORM_strx1
     res = std::make_shared<StrXNFormValue>(1);
     break;
@@ -121,16 +121,15 @@ FormValueFactory::createFormValue(const uint8_t formId) {
     res = std::make_shared<StrXNFormValue>(4);
     break;
   case 41: // DW_FORM_addrx1
-    logger.fatal("Unsupport DW_FORM_addrx1");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_addrx1");
   case 42: // DW_FORM_addrx2
-    logger.fatal("Unsupport DW_FORM_addrx2");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_addrx2");
   case 43: // DW_FORM_addrx3
-    logger.fatal("Unsupport DW_FORM_addrx3");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_addrx3");
   case 44: // DW_FORM_addrx4
-    logger.fatal("Unsupport DW_FORM_addrx4");
+    ILLVM_UNREACHABLE("Unsupport DW_FORM_addrx4");
   default:
-    logger.fatal("Unknown form id: " + std::to_string(formId));
-    break;
+    ILLVM_UNREACHABLE("Unknown form id");
   }
 
   return res;

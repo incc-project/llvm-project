@@ -1,16 +1,20 @@
 #ifndef ILLVM_DEBUGABBREVSECTION_H
 #define ILLVM_DEBUGABBREVSECTION_H
 
+#include <map>
+
 #include "illvm/FuncV/ELF/DebugBase.h"
 #include "illvm/FuncV/ELF/Section.h"
-
-#include <map>
 
 namespace illvm {
 namespace funcv {
 namespace elf {
 
 class DebugAbbrevSection final : public Section {
+private:
+  DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
+                       const char *_data, llvm::Error &err);
+
 public:
   // Structure representing an attribute-form pair in an abbreviation
   // declaration
@@ -31,8 +35,15 @@ public:
   // Map of abbreviation table
   std::vector<AbbreviationDecl> abbrevTable;
 
-  DebugAbbrevSection(const llvm::object::ELF64LE::Shdr *shdr,
-                     const char *_data);
+  static llvm::Expected<std::shared_ptr<DebugAbbrevSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<DebugAbbrevSection>(new DebugAbbrevSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   void dumpData(std::ostream &oss) const override;
 

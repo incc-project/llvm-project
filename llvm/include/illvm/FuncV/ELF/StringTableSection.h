@@ -33,9 +33,21 @@ private:
   // The first string should be "".
   std::vector<std::shared_ptr<StrRef>> strs;
 
+  StringTableSection(const llvm::object::ELF64LE::Shdr *shdr, const char *_data,
+                     llvm::Error &err);
+
 public:
-  StringTableSection(const llvm::object::ELF64LE::Shdr *shdr,
-                     const char *_data);
+
+  static llvm::Expected<std::shared_ptr<StringTableSection>>
+    Create(const llvm::object::ELF64LE::Shdr *shdr, const char *_data) {
+    llvm::Error err = llvm::Error::success();
+    auto section = std::shared_ptr<StringTableSection>(
+        new StringTableSection(shdr, _data, err));
+    if (err) {
+      return std::move(err);
+    }
+    return section;
+  }
 
   std::shared_ptr<StrRef> parseOriginalIndex(uint64_t strOff);
 
