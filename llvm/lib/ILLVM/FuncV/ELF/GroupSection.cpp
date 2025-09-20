@@ -12,8 +12,6 @@ namespace elf {
 GroupSection::GroupSection(const llvm::object::ELF64LE::Shdr *shdr,
                            const char *_data, llvm::Error &err)
     : Section(SectionType::Group, shdr, _data) {
-  const auto &logger = Logger::getInstance();
-
   ILLVM_FCHECK(shdr->sh_entsize == sizeof(uint32_t), "");
   ILLVM_FCHECK(shdr->sh_size % shdr->sh_entsize == 0, "");
 }

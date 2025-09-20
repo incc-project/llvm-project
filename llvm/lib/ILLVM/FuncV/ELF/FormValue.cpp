@@ -8,8 +8,6 @@ namespace elf {
 
 std::shared_ptr<FormValue>
 FormValueFactory::createFormValue(const uint8_t formId) {
-  const auto &logger = Logger::getInstance();
-
   std::shared_ptr<FormValue> res;
 
   switch (formId) {

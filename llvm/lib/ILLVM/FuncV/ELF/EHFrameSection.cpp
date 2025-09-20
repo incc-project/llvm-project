@@ -12,8 +12,6 @@ namespace elf {
 bool EhFrameSection::loadEntry(uint64_t &offset, uint32_t &length,
                                uint64_t &extLength, uint32_t &entryFlag,
                                const char *&otherData) const {
-  const auto &logger = Logger::getInstance();
-
   uint64_t actLength = 0;
   length = 0;
   extLength = 0;

@@ -111,8 +111,6 @@ static void runBase(clang::Sema *sema,
 }
 
 void IncCC1Driver::run(clang::Sema *sema) {
-  const auto &logger = illvm::Logger::getInstance();
-
   const auto &global = Global::getInstance();
 
   ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
@@ -132,8 +130,6 @@ void IncCC1Driver::run(clang::Sema *sema) {
 }
 
 void IncTestCC1Driver::run(clang::Sema *sema) {
-  const auto &logger = illvm::Logger::getInstance();
-
   const auto &global = Global::getInstance();
 
   ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
