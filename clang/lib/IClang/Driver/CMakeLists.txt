@@ -19,6 +19,6 @@ add_clang_library(iClangDriver
   iClangSupport
   iClangASTSupport
   ILLVMSupport
-  ILLVMFuncVELF
+#  ILLVMFuncVELF
   ${system_libs}
   )

@@ -1,6 +1,6 @@
 #include "iclang/Driver/IncDriver.h"
 
-#include "illvm/FuncV/ELF/FuncV.h"
+// #include "illvm/FuncV/ELF/FuncV.h"
 #include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/FileSystem.h"
 #include "illvm/Support/Time.h"
@@ -204,11 +204,11 @@ static void funcv(const std::shared_ptr<IncMetaData> &metaData,
   if (testMetaData != nullptr) {
     illvm::FileSystem::cpFile(metaData->outputPath, testMetaData->partialOPath);
   }
-  if (auto err = illvm::funcv::elf::FuncV::run(
-          metaData->prevOPath, metaData->outputPath, metaData->outputPath,
-          metaData->funcXSet)) {
-    ILLVM_UNREACHABLE("TODO");
-  }
+  // if (auto err = illvm::funcv::elf::FuncV::run(
+  //         metaData->prevOPath, metaData->outputPath, metaData->outputPath,
+  //         metaData->funcXSet)) {
+  //   ILLVM_UNREACHABLE("TODO");
+  // }
   if (testMetaData != nullptr) {
     illvm::FileSystem::cpFile(metaData->outputPath, testMetaData->outputOPath);
   } else {
@@ -237,11 +237,11 @@ static int runBase(Global &global, const std::shared_ptr<IncMetaData> &metaData,
     buildCache(global, metaData, clangDriver, originalArgv);
     // Step4. Load prev binary symbol table (iClangFlag && incFlag).
     illvm::FileSystem::cpFile(metaData->outputPath, metaData->prevOPath);
-    if (auto err =
-            illvm::funcv::elf::FuncV::onlyLoadSymbolTable(metaData->prevOPath)
-                .moveInto(metaData->prevAPIs)) {
-      ILLVM_UNREACHABLE("TODO: roll back");
-    }
+    // if (auto err =
+    //         illvm::funcv::elf::FuncV::onlyLoadSymbolTable(metaData->prevOPath)
+    //             .moveInto(metaData->prevAPIs)) {
+    //   ILLVM_UNREACHABLE("TODO: roll back");
+    // }
   }
 
   // Step5. Compilation (iClangFlag).

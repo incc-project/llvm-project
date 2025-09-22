@@ -103,7 +103,7 @@ add_clang_library(clangDriver
   # IClang begin
   iClangDriver
   ILLVMSupport
-  ILLVMFuncVELF
+#  ILLVMFuncVELF
   # IClang end
   ${system_libs}
   )

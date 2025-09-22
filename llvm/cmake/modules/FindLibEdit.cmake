@@ -59,7 +59,8 @@ find_package_handle_standard_args(LibEdit
 mark_as_advanced(LibEdit_INCLUDE_DIRS LibEdit_LIBRARIES)
 
 if (LibEdit_FOUND AND NOT TARGET LibEdit::LibEdit)
-  add_library(LibEdit::LibEdit INTERFACE IMPORTED)
+  add_library(LibEdit::LibEdit INTERFACE IMPORTED
+          ../../include/illvm/Support/Memory.h)
   target_link_libraries(LibEdit::LibEdit INTERFACE ${LibEdit_LIBRARIES})
   target_include_directories(LibEdit::LibEdit INTERFACE ${LibEdit_INCLUDE_DIRS})
 endif()
