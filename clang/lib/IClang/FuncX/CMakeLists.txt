@@ -2,9 +2,10 @@ set(LLVM_LINK_COMPONENTS
   Option
   ProfileData
   Support
+  ILLVMSupport
   )
 
-add_clang_library(iClangFuncX
+add_clang_library(clangIClangFuncX
   BasicAnalysis.cpp
   RefSymbolAnalysis.cpp
   ReusableInstAnalysis.cpp
@@ -15,8 +16,7 @@ add_clang_library(iClangFuncX
 
   LINK_LIBS
   clangBasic
-  iClangSupport
-  iClangASTSupport
-  ILLVMSupport
+  clangIClangSupport
+  clangIClangASTSupport
   ${system_libs}
 )

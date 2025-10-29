@@ -13,27 +13,14 @@
 #ifndef ICLANG_ASTMETADATA_H
 #define ICLANG_ASTMETADATA_H
 
-#include <memory>
-#include <string>
 #include <unordered_set>
 
 #include "clang/AST/Decl.h"
-#include "clang/AST/Mangle.h"
-#include "clang/Basic/SourceManager.h"
-#include "clang/Lex/Preprocessor.h"
 
 namespace iclang {
 
 class ASTMetaData {
 public:
-  // AST context.
-  clang::ASTContext *context = nullptr;
-
-  // Mangled name generator.
-  std::unique_ptr<clang::ASTNameGenerator> astNameGenerator = nullptr;
-
-  // Turn off warnings caused by funcx.
-  std::unordered_set<const clang::Decl*> disableWarningDecls;
 };
 
 class IncASTMetaData final : public ASTMetaData {

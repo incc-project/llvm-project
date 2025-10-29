@@ -2,10 +2,10 @@ set(LLVM_LINK_COMPONENTS
   Option
   ProfileData
   Support
+  ILLVMSupport
   )
 
-add_clang_library(iClangSupport
-  Config.cpp
+add_clang_library(clangIClangSupport
   Global.cpp
   MetaData.cpp
 
@@ -14,6 +14,5 @@ add_clang_library(iClangSupport
 
   LINK_LIBS
   clangBasic
-  ILLVMSupport
   ${system_libs}
 )

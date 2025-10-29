@@ -16,15 +16,33 @@
 #ifndef ICLANG_ASTGLOBAL_H
 #define ICLANG_ASTGLOBAL_H
 
+#include <memory>
+#include <string>
+
+#include "clang/AST/Mangle.h"
+#include "clang/Basic/SourceManager.h"
+
 #include "iclang/ASTSupport/ASTMetaData.h"
 #include "iclang/Support/Global.h"
+
+#include "illvm/Support/Memory.h"
 
 namespace iclang {
 
 class ASTGlobal {
 private:
   IClangMode iClangMode = IClangMode::ClangMode;
-  std::shared_ptr<ASTMetaData> astMetaData = nullptr;
+
+  // AST context.
+  clang::ASTContext *context = nullptr;
+
+  // Mangled name generator.
+  std::unique_ptr<clang::ASTNameGenerator> astNameGenerator = nullptr;
+
+  // Turn off warnings caused by funcx.
+  std::unordered_set<const clang::Decl*> disableWarningDecls = {};
+
+  illvm::OPtr<ASTMetaData> astMetaData;
 
   ASTGlobal() = default;
 
@@ -37,65 +55,24 @@ public:
     return instance;
   }
 
-  void init(const Global &global);
+  void init(const Global &global, clang::ASTContext *_context);
 
-  const auto &getASTMetaData() const { return astMetaData; }
-
-  std::shared_ptr<IncASTMetaData> getIncASTMetaData() const {
-    if (iClangMode == IClangMode::IncMode) {
-      return std::static_pointer_cast<IncASTMetaData>(astMetaData);
-    }
-    return nullptr;
+  template<typename T>
+  illvm::BPtr<T> getASTMetaData() {
+    return astMetaData.borrow().copyTo<T>();
   }
-
-  std::shared_ptr<IncTestASTMetaData> getIncTestASTMetaData() const {
-    if (iClangMode == IClangMode::IncTestMode) {
-      return std::static_pointer_cast<IncTestASTMetaData>(astMetaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<ShareMasterASTMetaData> getShareMasterASTMetaData() const {
-    if (iClangMode == IClangMode::ShareMasterMode) {
-      return std::static_pointer_cast<ShareMasterASTMetaData>(astMetaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<ShareClientASTMetaData> getShareClientASTMetaData() const {
-    if (iClangMode == IClangMode::ShareClientMode) {
-      return std::static_pointer_cast<ShareClientASTMetaData>(astMetaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<ShareTestASTMetaData> getShareTestASTMetaData() const {
-    if (iClangMode == IClangMode::ShareTestMode) {
-      return std::static_pointer_cast<ShareTestASTMetaData>(astMetaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<TestASTMetaData> getTestASTMetaData() const {
-    if (iClangMode == IClangMode::TestMode) {
-      return std::static_pointer_cast<TestASTMetaData>(astMetaData);
-    }
-    return nullptr;
-  }
-
-  void setContext(clang::ASTContext *_context) const;
 
   clang::ASTContext &getContext() const;
+
+  void addDisableWarningDecl(const clang::Decl *decl);
+
+  bool isDisableWarningDecl(const clang::Decl *decl) const;
 
   std::string getMangledName(const clang::NamedDecl *decl) const;
 
   illvm::SourceInterval getDeclSourceInterval(const clang::Decl *decl) const;
 
   std::string dumpDecl(const clang::Decl *decl) const;
-
-  void addDisableWarningDecl(const clang::Decl *decl) const;
-
-  bool isDisableWarningDecl(const clang::Decl *decl) const;
 };
 
 } // namespace iclang

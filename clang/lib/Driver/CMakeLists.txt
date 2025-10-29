@@ -7,6 +7,10 @@ set(LLVM_LINK_COMPONENTS
   Support
   TargetParser
   WindowsDriver
+  # IClang begin
+  ILLVMSupport
+  ILLVMFuncVELF
+  # IClang end
   )
 
 if(WIN32)
@@ -101,9 +105,7 @@ add_clang_library(clangDriver
   LINK_LIBS
   clangBasic
   # IClang begin
-  iClangDriver
-  ILLVMSupport
-#  ILLVMFuncVELF
+  clangIClangDriver
   # IClang end
   ${system_libs}
   )

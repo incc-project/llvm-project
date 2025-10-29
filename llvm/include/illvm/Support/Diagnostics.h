@@ -1,6 +1,8 @@
 #ifndef ILLVM_DIAGNOSTICS_H
 #define ILLVM_DIAGNOSTICS_H
 
+#include <cassert>
+
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FormatVariadic.h"
 
@@ -24,41 +26,41 @@ private:
   std::string msg;
 };
 
-#define ILLVM_WARN(MSG)                                                        \
-  illvm::Logger::getInstance().warning(                                        \
-      llvm::formatv("{0}: {1}: {2}", __FILE__, __PRETTY_FUNCTION__, MSG)       \
-          .str());
-
-#define ILLVM_UNREACHABLE(MSG)                                                 \
-  illvm::Logger::getInstance().fatal(                                          \
-      llvm::formatv("{0}: {1}: unreachable: {2}", __FILE__,                    \
-                    __PRETTY_FUNCTION__, MSG)                                  \
-          .str());
-
-#define ILLVM_FCHECK(EXPR, MSG)                                                \
-  if (__builtin_expect(!(EXPR), 0)) {                                          \
-    illvm::Logger::getInstance().fatal(                                        \
-        llvm::formatv("{0}: {1}: check failed: `{2}`: {3}", __FILE__,          \
-                      __PRETTY_FUNCTION__, #EXPR, MSG)                         \
-            .str());                                                           \
+#define ILLVM_ETRANS(RERR)                                                     \
+  if (auto err = RERR; __builtin_expect(static_cast<bool>(err), 0)) {          \
+    return err;                                                                \
   }
 
 #define ILLVM_ECHECK(EXPR, MSG)                                                \
   if (__builtin_expect(!(EXPR), 0)) {                                          \
     return llvm::make_error<illvm::ILLVMError>(                                \
-        llvm::formatv("{0}: {1}: check failed: `{2}`: {3}", __FILE__,          \
-                      __PRETTY_FUNCTION__, #EXPR, MSG)                         \
+        llvm::formatv("{0}: Check failed: `{1}`: {2}", __PRETTY_FUNCTION__,    \
+                      #EXPR, MSG)                                              \
             .str());                                                           \
   }
 
 #define ILLVM_ECHECK_TO(EXPR, MSG, ERR)                                        \
   if (__builtin_expect(!(EXPR), 0)) {                                          \
     ERR = llvm::make_error<illvm::ILLVMError>(                                 \
-        llvm::formatv("{0}: {1}: check failed: `{2}`: {3}", __FILE__,          \
-                      __PRETTY_FUNCTION__, #EXPR, MSG)                         \
+        llvm::formatv("{0}: Check failed: `{1}`: {2}", __PRETTY_FUNCTION__,    \
+                      #EXPR, MSG)                                              \
             .str());                                                           \
     return;                                                                    \
   }
+
+#define ILLVM_FCHECK(EXPR, MSG)                                                \
+  if (__builtin_expect(!(EXPR), 0)) {                                          \
+    illvm::Logger::getInstance().fatal(                                        \
+        __PRETTY_FUNCTION__,                                                   \
+        llvm::formatv("Check failed: `{0}`: {1}", #EXPR, MSG).str());          \
+  }
+
+#define ILLVM_FATAL_ON(RERR, MSG)                                              \
+  llvm::handleAllErrors(RERR, [&](const llvm::ErrorInfoBase &errInfo) {        \
+    illvm::Logger::getInstance().fatal(                                        \
+        __PRETTY_FUNCTION__,                                                   \
+        llvm::formatv("{1}: {2}", MSG, errInfo.message()).str());              \
+  });
 
 } // namespace illvm
 

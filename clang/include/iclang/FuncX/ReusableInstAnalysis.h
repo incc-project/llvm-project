@@ -45,6 +45,8 @@
 
 #include "iclang/FuncX/BasicAnalysis.h"
 
+#include "illvm/Support/Memory.h"
+
 namespace iclang {
 namespace funcx {
 
@@ -57,11 +59,11 @@ public:
 class TopIncludeRegionVisitor
     : public clang::RecursiveASTVisitor<TopIncludeRegionVisitor> {
 private:
-  clang::SourceManager &sourceManager;
+  const clang::SourceManager &sourceManager;
   unsigned mainFirstDeclLine = 0;
 
 public:
-  explicit TopIncludeRegionVisitor(clang::ASTContext &context)
+  explicit TopIncludeRegionVisitor(const clang::ASTContext &context)
       : sourceManager(context.getSourceManager()) {}
 
   bool TraverseDecl(clang::Decl *decl);
@@ -71,7 +73,7 @@ public:
 
 class ReusableInstAnalysis {
 private:
-  const std::shared_ptr<IncMetaData> &incMetaData;
+  illvm::BPtr<IncMetaData> incMetaData;
   ASTGlobal &astGlobal;
 
   clang::SourceManager &sourceManager;
@@ -115,8 +117,8 @@ public:
   using VSPair = std::pair<clang::ValueDecl *, clang::SourceLocation>;
 
   explicit ReusableInstAnalysis(
-      const std::shared_ptr<IncMetaData> &_incMetaData, ASTGlobal &_astGlobal)
-      : incMetaData(_incMetaData), astGlobal(_astGlobal),
+      illvm::BPtr<IncMetaData> &&_incMetaData, ASTGlobal &_astGlobal)
+      : incMetaData(std::move(_incMetaData)), astGlobal(_astGlobal),
         sourceManager(astGlobal.getContext().getSourceManager()) {}
 
   void run(std::deque<VSPair> &pendingInstQue);

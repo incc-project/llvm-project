@@ -17,6 +17,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "llvm/Support/Error.h"
+
 namespace illvm {
 
 class FileSystem {
@@ -33,50 +35,41 @@ public:
 
   static bool checkFileExists(const std::string &filepath);
 
-  static long long getLastModificationTime(const std::string &filepath);
+  static long long
+  getLastModificationTime(const std::string &filepath);
 
   static std::string readAll(const std::string &filepath);
 
-  static std::vector<std::string> readLines(const std::string &filepath);
+  static std::vector<std::string>
+  readLines(const std::string &filepath);
 
   // Note: check res.size() == n yourself.
-  static std::vector<std::string> readFirstNLines(const std::string &filepath,
-                                                  const size_t n);
+  static std::vector<std::string>
+  readFirstNLines(const std::string &filepath, const size_t n);
 
-  static bool mkdir(const std::string &dirpath);
-
-  // rm -f.
-  static void rmFile(const std::string &filepath);
-
-  // Make sure the directory is empty!
-  static void rmEmptyDir(const std::string &filepath);
-
-  static void rmDirDFS(const std::string &curDirPath);
+  // Return error when the dirpath exists.
+  static llvm::Error mkdir(const std::string &dirpath);
 
   // rm -rf.
-  static void rmDir(const std::string &filepath);
+  static void rmFile(const std::string &filepath);
 
   // Auto cover.
+  // Support mv directory.
   static void mvFile(const std::string &from, const std::string &to);
 
-  static void mvDirDFS(const std::string &baseFromDirPath,
-                       const std::string &baseToDirPath,
-                       const std::string &relDirPath = "");
-
   // Auto cover.
-  static void mvDir(const std::string &from, const std::string &to);
-
-  // Auto cover.
+  // Do not support cp -r yet.
   static void cpFile(const std::string &from, const std::string &to);
 
-  static void saveStr(const std::string &filepath, const std::string &str);
+  static void saveStr(const std::string &filepath,
+                             const std::string &str);
 
   static void saveVector(const std::string &filepath,
-                         const std::vector<std::string> &vec);
+                                const std::vector<std::string> &vec);
 
   static void saveSet(const std::string &filepath,
-                      const std::unordered_set<std::string> &st,
-                      const bool ordered = true);
+                             const std::unordered_set<std::string> &st,
+                             const bool ordered = true);
 };
 
 } // namespace illvm

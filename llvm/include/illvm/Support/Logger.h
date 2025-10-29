@@ -23,6 +23,8 @@ private:
 
   Logger() {}
 
+  void writeLog(const std::string &msg) const;
+
 public:
   static Logger &getInstance() {
     static Logger instance;
@@ -34,17 +36,16 @@ public:
 
   void initLogPath(const std::string &_logPath);
 
-  void info(const std::string &msg) const;
+  void info(const std::string &loc, const std::string &msg) const;
 
-  void debug(const std::string &msg) const;
+  void debug(const std::string &loc, const std::string &msg) const;
 
-  void warning(const std::string &msg) const;
+  void warning(const std::string &loc, const std::string &msg) const;
 
-  void error(const std::string &msg) const;
+  void error(const std::string &loc, const std::string &msg) const;
 
-  __attribute__((noreturn)) void fatal(const std::string &msg) const;
-
-  void writeLog(const std::string &msg) const;
+  __attribute__((noreturn)) void fatal(const std::string &loc,
+                                       const std::string &msg) const;
 };
 
 } // namespace illvm

@@ -8,6 +8,15 @@
 //
 // Sharing data between driver and cc1.
 //
+// iClangMode:
+// * "Inc": function-level incremental compilation.
+// * "IncTest": inc test mode for IClang developers.
+// * "ShareMaster": master mode of shared compilation optimization.
+// * "ShareClient": client mode of shared compilation optimization.
+// * "ShareTest": share test mode for IClang developers.
+// * "Profile": profile Clang.
+// * "Clang": default, equivalent to Clang.
+//
 //===----------------------------------------------------------------------===/
 
 #ifndef ICLANG_GLOBAL_H
@@ -16,27 +25,35 @@
 #include <memory>
 #include <string>
 
-#include "iclang/Support/Config.h"
 #include "iclang/Support/MetaData.h"
 
-namespace clang {
-namespace driver {
-class CC1Command;
-}
-}
+#include "illvm/Support/Diagnostics.h"
+#include "illvm/Support/Memory.h"
 
 namespace iclang {
 
+enum class IClangMode {
+  IncMode,
+  IncTestMode,
+  ShareMasterMode,
+  ShareClientMode,
+  ShareTestMode,
+  TestMode,
+  ProfileMode,
+  ClangMode
+};
+
+class ClangModeScope;
+
 class Global {
 private:
-  // Highest permission, IClang will only be enabled after it is set to true.
-  bool enabled = true;
-  Config config;
-  std::shared_ptr<MetaData> metaData;
+  IClangMode iClangMode = IClangMode::ClangMode;
+  illvm::OPtr<MetaData> metaData;
 
   Global() {}
 
 public:
+  friend ClangModeScope;
 
   Global(const Global &) = delete;
   Global &operator=(const Global &) = delete;
@@ -46,87 +63,90 @@ public:
     return instance;
   }
 
-  bool isEnabled() const { return enabled; }
+  IClangMode getIClangMode() const { return iClangMode; }
 
-  void setEnabled(const bool _enabled) { enabled = _enabled; }
+  bool isIClangMode(const IClangMode _iClangMode) const {
+    if (iClangMode == IClangMode::IncTestMode &&
+        _iClangMode == IClangMode::IncMode) {
+      return true;
+    }
+    return iClangMode == _iClangMode;
+  }
 
-  const Config &getConfig() const { return config; }
+  // Back to Clang.
+  void resetIClangMode() { iClangMode = IClangMode::ClangMode; }
 
-  static std::shared_ptr<MetaData>
-  createSpMetaData(const IClangMode iClangMode) {
-    std::shared_ptr<MetaData> metaData;
+  static illvm::OPtr<MetaData>
+  createMetaData(const IClangMode iClangMode) {
+    illvm::OPtr<MetaData> metaData;
     if (iClangMode == IClangMode::IncMode) {
-      metaData = std::make_unique<IncMetaData>();
+      metaData = illvm::make_owner<IncMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::IncTestMode) {
-      metaData = std::make_unique<IncTestMetaData>();
+      metaData = illvm::make_owner<IncTestMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareMasterMode) {
-      metaData = std::make_unique<ShareMasterMetaData>();
+      metaData = illvm::make_owner<ShareMasterMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareClientMode) {
-      metaData = std::make_unique<ShareClientMetaData>();
+      metaData = illvm::make_owner<ShareClientMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareTestMode) {
-      metaData = std::make_unique<ShareTestMetaData>();
+      metaData = illvm::make_owner<ShareTestMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::TestMode) {
-      metaData = std::make_unique<TestMetaData>();
+      metaData = illvm::make_owner<TestMetaData>().moveTo<MetaData>();
     } else {
-      metaData = std::make_unique<MetaData>();
+      metaData = illvm::make_owner<MetaData>();
     }
     return metaData;
   }
 
-  const std::shared_ptr<MetaData> &getMetaData() const { return metaData; }
-
-  std::shared_ptr<IncMetaData> getIncMetaData() const {
-    if (config.getIClangMode() == IClangMode::IncMode) {
-      return std::static_pointer_cast<IncMetaData>(metaData);
-    }
-    return nullptr;
+  template<typename T>
+  illvm::BPtr<T> getMetaData() {
+    return metaData.borrow().copyTo<T>();
   }
 
-  std::shared_ptr<IncTestMetaData> getIncTestMetaData() const {
-    if (config.getIClangMode() == IClangMode::IncTestMode) {
-      return std::static_pointer_cast<IncTestMetaData>(metaData);
+  void init(const std::string &iClangModeStr) {
+    if (iClangModeStr == "Inc") {
+      iClangMode = IClangMode::IncMode;
+    } else if (iClangModeStr == "IncTest") {
+      iClangMode = IClangMode::IncTestMode;
+    } else if (iClangModeStr == "ShareMaster") {
+      iClangMode = IClangMode::ShareMasterMode;
+    } else if (iClangModeStr == "ShareClient") {
+      iClangMode = IClangMode::ShareClientMode;
+    } else if (iClangModeStr == "ShareTest") {
+      iClangMode = IClangMode::ShareTestMode;
+    } else if (iClangModeStr == "Test") {
+      iClangMode = IClangMode::TestMode;
+    } else if (iClangModeStr == "Profile") {
+      iClangMode = IClangMode::ProfileMode;
+    } else if (iClangModeStr == "Clang") {
+      iClangMode = IClangMode::ClangMode;
+    } else {
+      ILLVM_FCHECK(false, "Unknown iClangMode: " + iClangModeStr);
     }
-    return nullptr;
-  }
 
-  std::shared_ptr<ShareMasterMetaData> getShareMasterMetaData() const {
-    if (config.getIClangMode() == IClangMode::ShareMasterMode) {
-      return std::static_pointer_cast<ShareMasterMetaData>(metaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<ShareClientMetaData> getShareClientMetaData() const {
-    if (config.getIClangMode() == IClangMode::ShareClientMode) {
-      return std::static_pointer_cast<ShareClientMetaData>(metaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<ShareTestMetaData> getShareTestMetaData() const {
-    if (config.getIClangMode() == IClangMode::ShareTestMode) {
-      return std::static_pointer_cast<ShareTestMetaData>(metaData);
-    }
-    return nullptr;
-  }
-
-  std::shared_ptr<TestMetaData> getTestMetaData() const {
-    if (config.getIClangMode() == IClangMode::TestMode) {
-      return std::static_pointer_cast<TestMetaData>(metaData);
-    }
-    return nullptr;
-  }
-
-  void init(const Config &_config, const std::shared_ptr<MetaData> &_metaData) {
-    config = _config;
-    metaData = _metaData;
+    metaData = createMetaData(iClangMode);
   }
 
   static void saveMetaDataToFile(const std::string &filepath,
-                                 const std::shared_ptr<MetaData> &md);
+                                 const illvm::BPtr<MetaData> &metaData);
 
-  static std::shared_ptr<MetaData>
+  static illvm::OPtr<MetaData>
   loadMetaDataFromFile(const std::string &filepath, const IClangMode iClangMode);
+};
+
+class ClangModeScope {
+private:
+  IClangMode prevIClangMode;
+  Global &global;
+
+public:
+  ClangModeScope() = delete;
+  explicit ClangModeScope(Global &_global) : global(_global) {
+    prevIClangMode = global.getIClangMode();
+    global.resetIClangMode();
+  }
+  ~ClangModeScope() {
+    global.iClangMode = prevIClangMode;
+  }
 };
 
 } // namespace iclang

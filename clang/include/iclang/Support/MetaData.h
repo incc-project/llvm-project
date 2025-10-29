@@ -18,7 +18,8 @@
 #include <vector>
 
 #include "illvm/Support/Interval.h"
-#include "illvm/Support/Json.h"
+
+#include "llvm/Support/JSON.h"
 
 namespace iclang {
 

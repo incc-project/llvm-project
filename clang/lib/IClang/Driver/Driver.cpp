@@ -1,6 +1,5 @@
 #include "iclang/Driver/Driver.h"
 
-#include "iclang/ASTSupport/ASTGlobal.h"
 #include "iclang/Driver/DriverBase.h"
 #include "iclang/Driver/IncDriver.h"
 #include "iclang/Driver/ShareDriver.h"
@@ -16,17 +15,14 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
                 const llvm::SmallVector<const char *, 128> &originalArgv,
                 const clang::driver::Driver &clangDriver) {
   auto &global = Global::getInstance();
-  auto &astGlobal = ASTGlobal::getInstance();
 
-  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
-
-  if (!DriverBase::init(global, astGlobal, kind, inputInfos, outputFilenames,
+  if (!DriverBase::init(global, kind, inputInfos, outputFilenames,
                         originalArgv)) {
-    global.setEnabled(false);
+    global.resetIClangMode();
     return DriverBase::clangCompile(clangDriver, originalArgv);
   }
 
-  const auto iClangMode = global.getConfig().getIClangMode();
+  const auto iClangMode = global.getIClangMode();
   if (iClangMode == IClangMode::IncMode) {
     return IncDriver::run(global, originalArgv, clangDriver);
   }

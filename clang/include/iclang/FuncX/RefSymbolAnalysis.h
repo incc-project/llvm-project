@@ -102,9 +102,9 @@ public:
 class AlwaysRefedAnalysis
     : public clang::RecursiveASTVisitor<AlwaysRefedAnalysis> {
 public:
-  clang::SourceManager &sm;
+  const clang::SourceManager &sm;
 
-  explicit AlwaysRefedAnalysis(clang::SourceManager &_sm) : sm(_sm) {}
+  explicit AlwaysRefedAnalysis(const clang::SourceManager &_sm) : sm(_sm) {}
 
   std::unordered_set<const clang::FunctionDecl *> alwaysRefedFuncDecls;
 

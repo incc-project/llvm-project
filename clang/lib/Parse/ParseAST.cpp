@@ -153,8 +153,8 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   // IClang begin
   const auto &global = iclang::Global::getInstance();
   auto &astGlobal = iclang::ASTGlobal::getInstance();
-  if (global.isEnabled()) {
-    astGlobal.setContext(&S.getASTContext());
+  if (!global.isIClangMode(iclang::IClangMode::ClangMode)) {
+    astGlobal.init(global, &S.getASTContext());
   }
   // IClang end
 

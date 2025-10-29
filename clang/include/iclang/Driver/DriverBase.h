@@ -25,7 +25,6 @@
 #include <vector>
 #include <unordered_map>
 
-#include "iclang/ASTSupport/ASTGlobal.h"
 #include "iclang/Support/Global.h"
 
 #include "clang/Driver/Action.h"
@@ -37,7 +36,7 @@ namespace iclang {
 class DriverBase {
 public:
   // Return false: back to Clang.
-  static bool init(Global &global, ASTGlobal &astGlobal,
+  static bool init(Global &global,
                    const clang::driver::Action::ActionClass &kind,
                    const std::vector<clang::driver::InputInfo> &inputInfos,
                    const std::vector<std::string> &outputFilenames,
@@ -61,7 +60,7 @@ public:
   clangCompile(const clang::driver::Driver &clangDriver,
                const llvm::SmallVector<const char *, 128> &originalArgv);
 
-  static void fini(const Global &global);
+  static void fini(Global &global);
 
   static int recover(Global &global, const clang::driver::Driver &clangDriver,
                      const llvm::SmallVector<const char *, 128> &originalArgv);

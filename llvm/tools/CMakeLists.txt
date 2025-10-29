@@ -79,4 +79,5 @@ endif()
 
 # ILLVM begin
 add_llvm_tool_subdirectory(illvm-funcv)
+add_llvm_tool_subdirectory(illvm-test)
 # ILLVM end

@@ -6,6 +6,9 @@ set(LLVM_LINK_COMPONENTS
   MC
   Support
   TargetParser
+  # IClang begin
+  ILLVMSupport
+  # IClang end
   )
 
 clang_tablegen(OpenCLBuiltins.inc -gen-clang-opencl-builtins
@@ -116,9 +119,8 @@ add_clang_library(clangSema
   clangLex
   clangSupport
   # IClang begin
-  iClangSupport
-  iClangASTSupport
-  iClangCC1Driver
-  ILLVMSupport
+  clangIClangSupport
+  clangIClangASTSupport
+  clangIClangCC1Driver
   # IClang end
   )

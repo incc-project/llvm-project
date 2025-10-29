@@ -3,35 +3,38 @@
 #include <iomanip>
 #include <sstream>
 
+#include "clang/Lex/Lexer.h"
+
 namespace iclang {
 
-void ASTGlobal::init(const Global &global) {
-  iClangMode = global.getConfig().getIClangMode();
+void ASTGlobal::init(const Global &global, clang::ASTContext *_context) {
+  iClangMode = global.getIClangMode();
+  std::unique_ptr<ASTMetaData> ptr;
   if (iClangMode == IClangMode::IncMode) {
-    astMetaData = std::make_unique<IncASTMetaData>();
+    astMetaData = illvm::make_owner<IncASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::IncTestMode) {
-    astMetaData = std::make_unique<IncTestASTMetaData>();
+    astMetaData = illvm::make_owner<IncTestASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareMasterMode) {
-    astMetaData = std::make_unique<ShareMasterASTMetaData>();
+    astMetaData =
+        illvm::make_owner<ShareMasterASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareClientMode) {
-    astMetaData = std::make_unique<ShareClientASTMetaData>();
+    astMetaData =
+        illvm::make_owner<ShareClientASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareTestMode) {
-    astMetaData = std::make_unique<ShareTestASTMetaData>();
+    astMetaData =
+        illvm::make_owner<ShareTestASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::TestMode) {
-    astMetaData = std::make_unique<TestASTMetaData>();
+    astMetaData = illvm::make_owner<TestASTMetaData>().moveTo<ASTMetaData>();
   } else {
-    astMetaData = std::make_unique<ASTMetaData>();
+    astMetaData = illvm::make_owner<ASTMetaData>();
   }
-}
-
-void ASTGlobal::setContext(clang::ASTContext *_context) const {
-  astMetaData->context = _context;
-  astMetaData->astNameGenerator =
-      std::make_unique<clang::ASTNameGenerator>(*_context);
+  context = _context;
+  astNameGenerator = std::make_unique<clang::ASTNameGenerator>(*_context);
 }
 
 clang::ASTContext &ASTGlobal::getContext() const {
-  return *astMetaData->context;
+  assert(context != nullptr);
+  return *context;
 }
 
 std::string ASTGlobal::getMangledName(const clang::NamedDecl *decl) const {
@@ -43,7 +46,7 @@ std::string ASTGlobal::getMangledName(const clang::NamedDecl *decl) const {
     if (varDecl && varDecl->hasLocalStorage()) {
       return "";
     }
-    return astMetaData->astNameGenerator->getName(decl);
+    return astNameGenerator->getName(decl);
   }
   return "";
 }
@@ -55,7 +58,7 @@ ASTGlobal::getDeclSourceInterval(const clang::Decl *decl) const {
   res.isValid = false;
 
   const auto sr = decl->getSourceRange();
-  const auto &sm = astMetaData->context->getSourceManager();
+  const auto &sm = context->getSourceManager();
 
   // start
   const clang::FullSourceLoc startFullSourceLoc(sr.getBegin(), sm);
@@ -67,7 +70,7 @@ ASTGlobal::getDeclSourceInterval(const clang::Decl *decl) const {
 
   // end
   const clang::SourceLocation endSourceLoc = clang::Lexer::getLocForEndOfToken(
-      sr.getEnd(), 0, sm, astMetaData->context->getLangOpts());
+      sr.getEnd(), 0, sm, context->getLangOpts());
   const clang::FullSourceLoc endFullSourceLoc(endSourceLoc, sm);
   if (endFullSourceLoc.isInvalid()) {
     return res;
@@ -104,13 +107,13 @@ std::string ASTGlobal::dumpDecl(const clang::Decl *decl) const {
   return oss.str();
 }
 
-void ASTGlobal::addDisableWarningDecl(const clang::Decl *decl) const {
-  astMetaData->disableWarningDecls.insert(decl->getCanonicalDecl());
+void ASTGlobal::addDisableWarningDecl(const clang::Decl *decl) {
+  disableWarningDecls.insert(decl->getCanonicalDecl());
 }
 
 bool ASTGlobal::isDisableWarningDecl(const clang::Decl *decl) const {
-  return astMetaData->disableWarningDecls.find(decl->getCanonicalDecl()) !=
-         astMetaData->disableWarningDecls.end();
+  return disableWarningDecls.find(decl->getCanonicalDecl()) !=
+         disableWarningDecls.end();
 }
 
 } // namespace iclang

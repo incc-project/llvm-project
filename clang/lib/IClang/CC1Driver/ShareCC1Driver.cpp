@@ -6,25 +6,24 @@
 
 namespace iclang {
 
+void ShareMasterCC1Driver::run() {
+
+}
+
+void ShareClientCC1Driver::run() {
+
+}
+
 void ShareTestCC1Driver::run() {
   auto &global = Global::getInstance();
 
-  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
-  ILLVM_FCHECK(global.getConfig().getIClangMode() ==
-                        IClangMode::ShareTestMode,
-                    "expected ShareTestMode");
+  assert(global.getIClangMode() == IClangMode::ShareTestMode);
 
   auto &astGlobal = ASTGlobal::getInstance();
   auto &context = astGlobal.getContext();
 
-  auto metaData =
-      std::static_pointer_cast<ShareTestMetaData>(global.getMetaData());
-  auto astMetaData = std::static_pointer_cast<ShareTestASTMetaData>(
-      astGlobal.getASTMetaData());
-
-  ILLVM_FCHECK(metaData != nullptr, "ShareTestMetaData convert failed");
-  ILLVM_FCHECK(astMetaData != nullptr,
-                    "ShareTestASTMetaData convert failed");
+  auto metaData = global.getMetaData<ShareTestMetaData>();
+  const auto astMetaData = astGlobal.getASTMetaData<ShareTestASTMetaData>();
 
   if (!metaData->enableRefedSymbolAnalysisFlag) {
     return;

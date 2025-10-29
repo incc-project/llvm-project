@@ -99,20 +99,22 @@ bool Preprocessor::EnterSourceFile(FileID FID, ConstSearchDirIterator CurDir,
 
   // IClang begin
   auto &global = iclang::Global::getInstance();
-  auto metaData = global.getIncMetaData();
-  auto testMetaData = global.getIncTestMetaData();
-  if (global.isEnabled() && metaData != nullptr &&
-      metaData->skipTopIncludeRegionFlag && FID == SourceMgr.getMainFileID()) {
-    metaData->hackedMainBuffer = InputFile->getBuffer().str();
-    metaData->hackedMainBuffer = metaData->hackMainBuffer(
-        metaData->hackedMainBuffer, metaData->topIncludeRegion);
-    metaData->hackedMainBufferRef = metaData->hackedMainBuffer;
-    if (testMetaData != nullptr) {
-      illvm::FileSystem::saveStr(testMetaData->cacheSrcPath,
-                                 metaData->hackedMainBuffer);
+  if (global.isIClangMode(iclang::IClangMode::IncMode)) {
+    auto metaData = global.getMetaData<iclang::IncMetaData>();
+    if (metaData->skipTopIncludeRegionFlag &&
+        FID == SourceMgr.getMainFileID()) {
+      metaData->hackedMainBuffer = InputFile->getBuffer().str();
+      metaData->hackedMainBuffer = metaData->hackMainBuffer(
+          metaData->hackedMainBuffer, metaData->topIncludeRegion);
+      metaData->hackedMainBufferRef = metaData->hackedMainBuffer;
+      if (global.isIClangMode(iclang::IClangMode::IncTestMode)) {
+        const auto testMetaData = metaData.copyTo<iclang::IncTestMetaData>();
+        illvm::FileSystem::saveStr(testMetaData->cacheSrcPath,
+                                   metaData->hackedMainBuffer);
+      }
+      InputFile = llvm::MemoryBufferRef(metaData->hackedMainBufferRef,
+                                        InputFile->getBufferIdentifier());
     }
-    InputFile = llvm::MemoryBufferRef(metaData->hackedMainBufferRef,
-                                      InputFile->getBufferIdentifier());
   }
   // IClang end
 

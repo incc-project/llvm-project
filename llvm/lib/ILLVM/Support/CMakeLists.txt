@@ -1,9 +1,8 @@
-add_llvm_component_library(ILLVMSupport
+add_llvm_component_library(LLVMILLVMSupport
   BinFile.cpp
   Diagnostics.cpp
   FileSystem.cpp
   Interval.cpp
-  Json.cpp
   Logger.cpp
   Strings.cpp
   Time.cpp

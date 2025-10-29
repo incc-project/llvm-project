@@ -35,7 +35,7 @@ public:
 
 class ShareTestDriver {
 public:
-  static int run(const Global &global,
+  static int run(Global &global,
                  const llvm::SmallVector<const char *, 128> &originalArgv,
                  const clang::driver::Driver &clangDriver);
 };

@@ -20,10 +20,9 @@ int ShareClientDriver::run(
 }
 
 static void
-configTestPaths(const std::shared_ptr<ShareTestMetaData> &metaData) {
+configTestPaths(illvm::BPtr<ShareTestMetaData> &metaData) {
   const auto preWorkPath = metaData->iClangDirPath[PrevDir];
   const auto workPath = metaData->iClangDirPath[CurDir];
-
 
   metaData->ppPath = illvm::FileSystem::linkPath(workPath, "iclang.i");
   metaData->ppSPath = illvm::FileSystem::linkPath(workPath, "iclangs.i");
@@ -32,7 +31,7 @@ configTestPaths(const std::shared_ptr<ShareTestMetaData> &metaData) {
 // outputPath -> iclang.i
 // -emit-obj -> -E
 static int
-clangECompile(const std::shared_ptr<ShareTestMetaData> &metaData,
+clangECompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
               const clang::driver::Driver &clangDriver,
               const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, -1, "",
@@ -42,7 +41,7 @@ clangECompile(const std::shared_ptr<ShareTestMetaData> &metaData,
 
 // inputPath -> iclang.i
 static int
-clangEOCompile(const std::shared_ptr<ShareTestMetaData> &metaData,
+clangEOCompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
                const clang::driver::Driver &clangDriver,
                const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, metaData->inputIdx,
@@ -51,7 +50,7 @@ clangEOCompile(const std::shared_ptr<ShareTestMetaData> &metaData,
 
 // inputPath -> iclangs.i
 static int
-clangESOCompile(const std::shared_ptr<ShareTestMetaData> &metaData,
+clangESOCompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
                 const clang::driver::Driver &clangDriver,
                 const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, metaData->inputIdx,
@@ -80,17 +79,13 @@ static int getLoc(const std::string &filepath) {
 }
 
 int ShareTestDriver::run(
-    const Global &global,
+    Global &global,
     const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {
-  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
-  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::ShareTestMode,
-               "expected ShareTestMode");
 
-  auto metaData =
-      std::static_pointer_cast<ShareTestMetaData>(global.getMetaData());
+  assert(global.getIClangMode() == IClangMode::ShareTestMode);
 
-  ILLVM_FCHECK(metaData != nullptr, "ShareTestMetaData convert failed");
+  auto metaData = global.getMetaData<ShareTestMetaData>();
 
   configTestPaths(metaData);
 
@@ -106,7 +101,7 @@ int ShareTestDriver::run(
   //   Failed: fatal.
 
   // clang++ -E -o iclang.i inputPath.
-  int res = clangECompile(metaData, clangDriver, originalArgv);
+  int res = clangECompile(metaData.constCopy(), clangDriver, originalArgv);
   if (res != 0) {
     metaData->recoverFlag = true;
     DriverBase::fini(global);
@@ -118,7 +113,7 @@ int ShareTestDriver::run(
 
   // original.
   startTsMs = illvm::Time::currentTsMs();
-  res = clangEOCompile(metaData, clangDriver, originalArgv);
+  res = clangEOCompile(metaData.constCopy(), clangDriver, originalArgv);
   if (res != 0) {
     metaData->recoverFlag = true;
     DriverBase::fini(global);
@@ -130,7 +125,7 @@ int ShareTestDriver::run(
   // master.
   startTsMs = illvm::Time::currentTsMs();
   metaData->enableRefedSymbolAnalysisFlag = true;
-  res = clangEOCompile(metaData, clangDriver, originalArgv);
+  res = clangEOCompile(metaData.constCopy(), clangDriver, originalArgv);
   ILLVM_FCHECK(res == 0, "master error!");
   metaData->enableRefedSymbolAnalysisFlag = false;
   endTsMs = illvm::Time::currentTsMs();
@@ -145,7 +140,7 @@ int ShareTestDriver::run(
   illvm::FileSystem::saveStr(metaData->ppSPath, content);
   // FileSystem::cpFile(global.ppPath, global.ppSPath);
 
-  res = clangESOCompile(metaData, clangDriver, originalArgv);
+  res = clangESOCompile(metaData.constCopy(), clangDriver, originalArgv);
   ILLVM_FCHECK(res == 0, "client error!");
   endTsMs = illvm::Time::currentTsMs();
   metaData->clientTimeMs = endTsMs - startTsMs;

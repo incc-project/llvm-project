@@ -1056,8 +1056,9 @@ static void checkUndefinedButUsed(Sema &S) {
       // FIXME: This is ill-formed; we should reject.
       // IClang Begin
       const auto &global = iclang::Global::getInstance();
-      auto &astGlobal = iclang::ASTGlobal::getInstance();
-      if (!global.isEnabled() || !astGlobal.isDisableWarningDecl(FD)) {
+      const auto &astGlobal = iclang::ASTGlobal::getInstance();
+      if (!global.isIClangMode(iclang::IClangMode::ClangMode) &&
+          !astGlobal.isDisableWarningDecl(FD)) {
         // FIXME: This is ill-formed; we should reject.
         S.Diag(VD->getLocation(), diag::warn_undefined_inline) << VD;
       }
@@ -1236,13 +1237,11 @@ void Sema::ActOnEndOfTranslationUnitFragment(TUFragmentKind Kind) {
 
     // IClang begin
     const auto &global = iclang::Global::getInstance();
-    if (global.isEnabled()) {
-      auto iClangMode = global.getConfig().getIClangMode();
-      if (iClangMode == iclang::IClangMode::IncMode) {
-        iclang::IncCC1Driver::run(this);
-      } else if (iClangMode == iclang::IClangMode::IncTestMode) {
-        iclang::IncTestCC1Driver::run(this);
-      }
+    auto iClangMode = global.getIClangMode();
+    if (iClangMode == iclang::IClangMode::IncMode) {
+      iclang::IncCC1Driver::run(this);
+    } else if (iClangMode == iclang::IClangMode::IncTestMode) {
+      iclang::IncTestCC1Driver::run(this);
     } else {
       PerformPendingInstantiations();
     }

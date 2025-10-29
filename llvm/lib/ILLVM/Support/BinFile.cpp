@@ -7,27 +7,23 @@ namespace illvm {
 BinFile::BinFile(const std::string &path)
     : filePath(path), fileData(nullptr), fileSize(0) {
   std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-  ILLVM_FCHECK(file.is_open(), "failed to open file: " + filePath);
-
+  ILLVM_FCHECK(file.is_open(), "Failed to open binary file: " + filePath);
   fileSize = file.tellg();
   file.seekg(0, std::ios::beg);
 
   fileData = malloc(fileSize);
   ILLVM_FCHECK(fileData != nullptr,
-               "memory allocation failed for file: " + filePath);
+               "Malloc failed for binary file: " + filePath);
 
-  if (!file.read(static_cast<char *>(fileData), fileSize)) {
-    free(fileData);
-    ILLVM_UNREACHABLE("error reading file: " + filePath);
-  }
+  ILLVM_FCHECK(file.read(static_cast<char *>(fileData), fileSize),
+               "Failed to read binary file: " + filePath);
 
   file.close();
 }
 
-const char *BinFile::readBytes(const int offset) const {
-  ILLVM_FCHECK(0 <= offset && offset < fileSize,
-               "offset out of range in file: " + filePath);
-  return static_cast<char *>(fileData) + offset;
+const uint8_t *BinFile::readBytes(const size_t offset) const {
+  assert(offset < static_cast<size_t>(fileSize));
+  return static_cast<uint8_t *>(fileData) + offset;
 }
 
 } // namespace illvm

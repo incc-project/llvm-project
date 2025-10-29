@@ -1,9 +1,10 @@
 set(LLVM_LINK_COMPONENTS
   Option
   ProfileData
+  ILLVMSupport
   )
 
-add_clang_library(iClangASTSupport
+add_clang_library(clangIClangASTSupport
   ASTGlobal.cpp
   ASTMetaData.cpp
 
@@ -12,7 +13,6 @@ add_clang_library(iClangASTSupport
 
   LINK_LIBS
   clangBasic
-  iClangSupport
-  ILLVMSupport
+  clangIClangSupport
   ${system_libs}
 )

@@ -39,8 +39,8 @@ static unsigned calCacheLine(const unsigned mainFirstDeclLine,
   return res;
 }
 
-static void recordHeader(const std::shared_ptr<IncMetaData> &metaData,
-                         clang::ASTContext &context) {
+static void recordHeader(illvm::BPtr<IncMetaData> &metaData,
+                         const clang::ASTContext &context) {
   metaData->topIncludeRegion.clear();
   metaData->headerTs.clear();
 
@@ -81,10 +81,9 @@ static void recordHeader(const std::shared_ptr<IncMetaData> &metaData,
   }
 }
 
-static void runBase(clang::Sema *sema,
-                    const std::shared_ptr<IncMetaData> &metaData,
-                    const std::shared_ptr<IncTestMetaData> &testMetaData,
-                    ASTGlobal &astGlobal) {
+static void runBase(clang::Sema *sema, illvm::BPtr<IncMetaData> &metaData,
+        const std::optional<illvm::BPtr<const IncTestMetaData>> &testMetaData,
+        ASTGlobal &astGlobal) {
   // Step6. Record top include region and header timestamp (!incFlag).
   if (!metaData->incFlag) {
     recordHeader(metaData, astGlobal.getContext());
@@ -94,11 +93,12 @@ static void runBase(clang::Sema *sema,
   if (metaData->incFlag) {
     const auto start = std::chrono::high_resolution_clock::now();
 
-    funcx::ReusableInstAnalysis reusableInstAnalysis(metaData, astGlobal);
+    funcx::ReusableInstAnalysis reusableInstAnalysis(metaData.copy(),
+                                                     astGlobal);
     reusableInstAnalysis.run(sema->PendingInstantiations);
 
-    if (testMetaData != nullptr) {
-      illvm::FileSystem::saveSet(testMetaData->funcXTxtPath,
+    if (testMetaData.has_value()) {
+      illvm::FileSystem::saveSet(testMetaData.value()->funcXTxtPath,
                                  metaData->funcXSet);
     }
 
@@ -111,44 +111,27 @@ static void runBase(clang::Sema *sema,
 }
 
 void IncCC1Driver::run(clang::Sema *sema) {
-  const auto &global = Global::getInstance();
+  auto &global = Global::getInstance();
 
-  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
-  ILLVM_FCHECK(global.getConfig().getIClangMode() == IClangMode::IncMode,
-                      "expected IncMode");
+  assert(global.getIClangMode() == IClangMode::IncMode);
 
   auto &astGlobal = ASTGlobal::getInstance();
 
-  auto metaData = std::static_pointer_cast<IncMetaData>(global.getMetaData());
-  auto astMetaData =
-      std::static_pointer_cast<IncASTMetaData>(astGlobal.getASTMetaData());
+  auto metaData = global.getMetaData<IncMetaData>();
 
-  ILLVM_FCHECK(metaData != nullptr, "IncMetaData convert failed");
-  ILLVM_FCHECK(astMetaData != nullptr, "IncASTMetaData convert failed");
-
-  runBase(sema, metaData, nullptr, astGlobal);
+  runBase(sema, metaData, std::nullopt, astGlobal);
 }
 
 void IncTestCC1Driver::run(clang::Sema *sema) {
-  const auto &global = Global::getInstance();
+  auto &global = Global::getInstance();
 
-  ILLVM_FCHECK(global.isEnabled(), "IClang is not enabled");
-  ILLVM_FCHECK(global.getConfig().getIClangMode() ==
-                        IClangMode::IncTestMode,
-                    "expected IncTestTestMode");
+  assert(global.getIClangMode() == IClangMode::IncTestMode);
 
   auto &astGlobal = ASTGlobal::getInstance();
 
-  auto metaData =
-      std::static_pointer_cast<IncTestMetaData>(global.getMetaData());
-  auto astMetaData =
-      std::static_pointer_cast<IncTestASTMetaData>(astGlobal.getASTMetaData());
+  auto metaData = global.getMetaData<IncMetaData>();
 
-  ILLVM_FCHECK(metaData != nullptr, "IncTestMetaData convert failed");
-  ILLVM_FCHECK(astMetaData != nullptr,
-                    "IncTestASTMetaData convert failed");
-
-  runBase(sema, metaData, metaData, astGlobal);
+  runBase(sema, metaData, metaData.constCopyTo<IncTestMetaData>(), astGlobal);
 }
 
 } // namespace iclang

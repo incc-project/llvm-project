@@ -9387,7 +9387,7 @@ def wasm_opt : Flag<["--"], "wasm-opt">,
   MarshallingInfoNegativeFlag<LangOpts<"NoWasmOpt">>;
 
 // IClang begin
-def iclang : Joined<["-"], "iclang">,
+def iclang : Joined<["-"], "iclang=">,
     HelpText<"Enable IClang with the provided config file">,
     Flags<[NoArgumentUnused]>,
     Visibility<[ClangOption, CC1Option]>;

@@ -5317,6 +5317,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // IClang begin
+  Args.AddLastArg(CmdArgs, options::OPT_iclang);
+  // IClang end
+
   Args.AddLastArg(CmdArgs, options::OPT_dumpdir);
 
   if (const Arg *A = Args.getLastArg(options::OPT_fthinlto_index_EQ)) {

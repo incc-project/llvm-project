@@ -18,14 +18,15 @@ namespace illvm {
 std::string FileSystem::getCurrentPath() {
   llvm::SmallString<256> res;
   const auto ec = llvm::sys::fs::current_path(res);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "Get current path error: " + ec.message());
   return res.str().str();
 }
 
 std::string FileSystem::toAbsPath(const std::string &filepath) {
   llvm::SmallString<256> absolutePath(filepath);
   const auto ec = llvm::sys::fs::make_absolute(absolutePath);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec,
+               "Convert " + filepath + " to abs path error: " + ec.message());
   llvm::sys::path::remove_dots(absolutePath);
   return absolutePath.str().str();
 }
@@ -50,7 +51,8 @@ bool FileSystem::checkFileExists(const std::string &filepath) {
 long long FileSystem::getLastModificationTime(const std::string &filepath) {
   llvm::sys::fs::file_status status;
   const auto ec = llvm::sys::fs::status(filepath, status);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "Get the last modification time of file " + filepath +
+                        " error: " + ec.message());
   const llvm::sys::TimePoint<> time = status.getLastModificationTime();
   const auto duration = time.time_since_epoch();
   const auto milliseconds =
@@ -106,36 +108,25 @@ FileSystem::readFirstNLines(const std::string &filepath, const size_t n) {
   return result;
 }
 
-bool FileSystem::mkdir(const std::string &dirpath) {
+llvm::Error FileSystem::mkdir(const std::string &dirpath) {
   const std::error_code ec = llvm::sys::fs::create_directory(dirpath, false);
-  if (ec) {
-    ILLVM_WARN(ec.message());
-    return false;
-  }
-  return true;
+  ILLVM_ECHECK(!ec, "Can not create directory " + dirpath +
+                        " error: " + ec.message());
+  return llvm::Error::success();
 }
 
-void FileSystem::rmFile(const std::string &filepath) {
-  if (!checkFileExists(filepath)) {
-    return;
-  }
-  ILLVM_FCHECK(llvm::sys::fs::is_regular_file(filepath),
-               "Only support rm regular file: " + filepath);
+static void rmSingleFile(const std::string &filepath) {
   const auto ec = llvm::sys::fs::remove(filepath);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "Can not remove file " + filepath + ": " + ec.message());
 }
 
-void FileSystem::rmEmptyDir(const std::string &filepath) {
-  if (!checkFileExists(filepath)) {
-    return;
-  }
-  ILLVM_FCHECK(llvm::sys::fs::is_directory(filepath),
-               "Only support rm directory: " + filepath);
+static void rmEmptyDir(const std::string &filepath) {
   const auto ec = llvm::sys::fs::remove_directories(filepath);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec,
+               "Can not remove directory " + filepath + ": " + ec.message());
 }
 
-void FileSystem::rmDirDFS(const std::string &curDirPath) {
+static void rmDirDFS(const std::string &curDirPath) {
   namespace fs = llvm::sys::fs;
   namespace path = llvm::sys::path;
 
@@ -148,44 +139,53 @@ void FileSystem::rmDirDFS(const std::string &curDirPath) {
     const std::string entryName = path::filename(entryPath).str();
 
     if (fs::is_regular_file(entryPath)) {
-      rmFile(entryPath);
+      FileSystem::rmFile(entryPath);
     } else if (fs::is_directory(entryPath)) {
-      const std::string newDirPath = linkPath(curDirPath, entryName);
+      const std::string newDirPath =
+          FileSystem::linkPath(curDirPath, entryName);
       rmDirDFS(newDirPath);
+    } else {
+      ILLVM_FCHECK(false, "Unknown file type: " + entryPath);
     }
   }
 
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "Traverse dir " + curDirPath + " error: " + ec.message());
 
   rmEmptyDir(curDirPath);
 }
 
-void FileSystem::rmDir(const std::string &filepath) {
+void FileSystem::rmFile(const std::string &filepath) {
   if (!checkFileExists(filepath)) {
     return;
   }
-  ILLVM_FCHECK(llvm::sys::fs::is_directory(filepath),
-               "Only support rm directory: " + filepath);
-  rmDirDFS(filepath);
+  if (llvm::sys::fs::is_regular_file(filepath)) {
+    rmSingleFile(filepath);
+  } else if (llvm::sys::fs::is_directory(filepath)) {
+    rmDirDFS(filepath);
+  } else {
+    ILLVM_FCHECK(false, "Unknown file type: " + filepath);
+  }
 }
 
-void FileSystem::mvFile(const std::string &from, const std::string &to) {
-  rmFile(to);
+static void mvSingleFile(const std::string &from,
+                                const std::string &to) {
   const auto ec = llvm::sys::fs::rename(from, to);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "mv " + from + " to " + to + " error: " + ec.message());
 }
 
-void FileSystem::mvDirDFS(const std::string &baseFromDirPath,
+static void mvDirDFS(const std::string &baseFromDirPath,
                           const std::string &baseToDirPath,
-                          const std::string &relDirPath) {
+                          const std::string &relDirPath = "") {
   namespace fs = llvm::sys::fs;
   namespace path = llvm::sys::path;
 
-  const std::string fromDirPath = linkPath(baseFromDirPath, relDirPath);
-  const std::string toDirPath = linkPath(baseToDirPath, relDirPath);
+  const std::string fromDirPath =
+      FileSystem::linkPath(baseFromDirPath, relDirPath);
+  const std::string toDirPath = FileSystem::linkPath(baseToDirPath, relDirPath);
 
-  std::error_code ec = fs::create_directories(toDirPath);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FATAL_ON(FileSystem::mkdir(toDirPath), "");
+
+  std::error_code ec;
 
   for (fs::directory_iterator it(fromDirPath, ec), end; it != end && !ec;
        it.increment(ec)) {
@@ -194,30 +194,37 @@ void FileSystem::mvDirDFS(const std::string &baseFromDirPath,
     const std::string fromEntryName = path::filename(fromEntryPath).str();
 
     if (fs::is_regular_file(fromEntryPath)) {
-      const std::string toEntryPath = linkPath(toDirPath, fromEntryName);
-      mvFile(fromEntryPath, toEntryPath);
+      const std::string toEntryPath = FileSystem::linkPath(toDirPath, fromEntryName);
+      mvSingleFile(fromEntryPath, toEntryPath);
     } else if (fs::is_directory(fromEntryPath)) {
-      const std::string newRelDirPath = linkPath(relDirPath, fromEntryName);
+      const std::string newRelDirPath = FileSystem::linkPath(relDirPath, fromEntryName);
       mvDirDFS(baseFromDirPath, baseToDirPath, newRelDirPath);
+    } else {
+      ILLVM_FCHECK(false, "Unknown file type: " + fromEntryPath);
     }
   }
 
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "Traverse dir " + fromDirPath + " error: " + ec.message());
 
   rmEmptyDir(fromDirPath);
 }
 
-void FileSystem::mvDir(const std::string &from, const std::string &to) {
+void FileSystem::mvFile(const std::string &from, const std::string &to) {
   ILLVM_FCHECK(checkFileExists(from),
-               "mv " + from + " to " + to + " failed: " + "from does not exist")
-  rmDir(to);
-  mvDirDFS(from, to);
+               "mv " + from + " to " + to + " failed: from does not exist")
+  if (llvm::sys::fs::is_regular_file(from)) {
+    mvSingleFile(from, to);
+  } else if (llvm::sys::fs::is_directory(from)) {
+    mvDirDFS(from, to);
+  } else {
+    ILLVM_FCHECK(false, "Unknown file type: " + from);
+  }
 }
 
 void FileSystem::cpFile(const std::string &from, const std::string &to) {
-  rmFile(to);
+  rmSingleFile(to);
   const auto ec = llvm::sys::fs::copy_file(from, to);
-  ILLVM_FCHECK(!ec, ec.message());
+  ILLVM_FCHECK(!ec, "cp " + from + " to " + to + " error: " + ec.message());
 }
 
 void FileSystem::saveStr(const std::string &filepath, const std::string &str) {

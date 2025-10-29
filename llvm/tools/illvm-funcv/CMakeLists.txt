@@ -3,6 +3,8 @@ set(LLVM_LINK_COMPONENTS
   MCParser
   Support
   TargetParser
+  ILLVMSupport
+  ILLVMFuncVELF
 )
 
 add_llvm_tool(illvm-funcv

@@ -13,8 +13,11 @@
 #ifndef ILLVM_BINFILE_HPP
 #define ILLVM_BINFILE_HPP
 
+#include <cstdint>
 #include <fstream>
 #include <string>
+
+#include "llvm/Support/Error.h"
 
 namespace illvm {
 
@@ -27,6 +30,8 @@ private:
   std::streamsize fileSize;
 
 public:
+  BinFile() = delete;
+
   explicit BinFile(const std::string &path);
 
   ~BinFile() {
@@ -39,7 +44,7 @@ public:
 
   const std::string &getFilePath() const { return filePath; }
 
-  const char *readBytes(const int offset) const;
+  const uint8_t *readBytes(const size_t offset) const;
 };
 
 } // namespace illvm

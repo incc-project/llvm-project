@@ -33,10 +33,10 @@ static bool assembleJobCheck(const clang::driver::Action::ActionClass &kind) {
 }
 
 static bool checkArgs(const std::vector<clang::driver::InputInfo> &inputInfos,
-                    const std::vector<std::string> &outputFilenames,
-                    const llvm::SmallVector<const char *, 128> &originalArgv,
-                    std::string &inputPath, std::string &outputPath,
-                    int &inputIdx, int &outputIdx, int &emitObjIdx) {
+                      const std::vector<std::string> &outputFilenames,
+                      const llvm::SmallVector<const char *, 128> &originalArgv,
+                      std::string &inputPath, std::string &outputPath,
+                      int &inputIdx, int &outputIdx, int &emitObjIdx) {
   if (inputInfos.size() != 1 || !inputInfos[0].isFilename() ||
       outputFilenames.size() != 1) {
     return false;
@@ -83,10 +83,10 @@ static bool checkArgs(const std::vector<clang::driver::InputInfo> &inputInfos,
 }
 
 static void
-configPaths(const Global &global, const std::string &prevWorkPath,
+configPaths(Global &global, const std::string &prevWorkPath,
             const std::string &workPath,
             const llvm::SmallVector<const char *, 128> &originalArgv) {
-  const auto &metaData = global.getMetaData();
+  auto metaData = global.getMetaData<MetaData>();
 
   metaData->currentPath = illvm::FileSystem::getCurrentPath();
   metaData->originalCommand = illvm::Strings::argVToArgs(originalArgv);
@@ -105,22 +105,20 @@ configPaths(const Global &global, const std::string &prevWorkPath,
 }
 
 bool DriverBase::init(
-    Global &global, ASTGlobal &astGlobal,
+    Global &global,
     const clang::driver::Action::ActionClass &kind,
     const std::vector<clang::driver::InputInfo> &inputInfos,
     const std::vector<std::string> &outputFilenames,
     const llvm::SmallVector<const char *, 128> &originalArgv) {
   // Load IClang config.
   const auto iClangArg = parseIClangArg(originalArgv);
-  Config config;
-  config.loadConfig(iClangArg);
-  auto metaData = Global::createSpMetaData(config.getIClangMode());
-  global.init(config, metaData);
-  astGlobal.init(global);
+  global.init(iClangArg);
 
-  if (config.getIClangMode() == IClangMode::ClangMode) {
+  if (global.isIClangMode(IClangMode::ClangMode)) {
     return false;
   }
+
+  auto metaData = global.getMetaData<MetaData>();
 
   // Record Start time stamp.
   metaData->startTs = illvm::Time::currentTsMs();
@@ -130,14 +128,17 @@ bool DriverBase::init(
   // * Only 1 matching input / output / '-emit-obj'.
   if (!assembleJobCheck(kind) ||
       !checkArgs(inputInfos, outputFilenames, originalArgv, metaData->inputPath,
-               metaData->outputPath, metaData->inputIdx, metaData->outputIdx,
-               metaData->emitObjIdx)) {
+                 metaData->outputPath, metaData->inputIdx, metaData->outputIdx,
+                 metaData->emitObjIdx)) {
     return false;
   }
   // * Important: concurrent compilation, only one can work.
   const std::string prevWorkPath = metaData->outputPath + ".iclang";
   const std::string workPath = metaData->outputPath + ".iclangtmp";
-  if (!illvm::FileSystem::mkdir(workPath)) {
+  if (auto err = illvm::FileSystem::mkdir(workPath)) {
+    llvm::consumeError(std::move(err));
+    illvm::Logger::getInstance().warning(
+        __PRETTY_FUNCTION__, "Detected " + workPath + ", back to Clang");
     return false;
   }
 
@@ -151,8 +152,7 @@ int DriverBase::compile(
     const clang::driver::Driver &clangDriver,
     const llvm::SmallVector<const char *, 128> &originalArgv,
     const int inputIdx, const char *newInputPath, const int outputIdx,
-    const char *newOutputPath, const int emitIdx,
-    const char *newEmit,
+    const char *newOutputPath, const int emitIdx, const char *newEmit,
     const std::unordered_map<std::string, int> &skipArgs,
     const std::vector<const char *> &newArgs) {
   llvm::SmallVector<const char *, 128> argv;
@@ -209,8 +209,8 @@ int DriverBase::clangCompile(
   return compile(clangDriver, originalArgv, -1, "", -1, "", -1, "", {}, {});
 }
 
-void DriverBase::fini(const Global &global) {
-  auto &metaData = global.getMetaData();
+void DriverBase::fini(Global &global) {
+  auto metaData = global.getMetaData<MetaData>();
 
   // End time stamp.
   metaData->endTs = illvm::Time::currentTsMs();
@@ -219,27 +219,31 @@ void DriverBase::fini(const Global &global) {
   // Gen .iclangtmp/compile.json.
   Global::saveMetaDataToFile(metaData->compileJsonPath[CurDir], metaData);
   // rm .iclang, mv .iclangtmp .iclang
-  illvm::FileSystem::mvDir(metaData->iClangDirPath[CurDir],
-                     metaData->iClangDirPath[PrevDir]);
+  illvm::FileSystem::mvFile(metaData->iClangDirPath[CurDir],
+                            metaData->iClangDirPath[PrevDir]);
 }
 
 int DriverBase::recover(
     Global &global, const clang::driver::Driver &clangDriver,
     const llvm::SmallVector<const char *, 128> &originalArgv) {
-  const auto metaData = global.getMetaData();
+  const auto &logger = illvm::Logger::getInstance();
+  auto metaData = global.getMetaData<MetaData>();
 
-  ILLVM_WARN("Compilation error, try rolling back to Clang.");
+  logger.warning(__PRETTY_FUNCTION__,
+                 "Compilation error, try rolling back to Clang.");
 
-  global.setEnabled(false);
+  global.resetIClangMode();
   const int res = clangCompile(clangDriver, originalArgv);
 
   if (res != 0) {
-    ILLVM_WARN("Clang also encountered compilation errors, "
-                 "please check your source code.");
+    logger.warning(__PRETTY_FUNCTION__,
+                   "Clang also encountered compilation errors, "
+                   "please check your source code.");
   } else {
     metaData->recoverFlag = true;
-    ILLVM_WARN("IClang internal error, enable recovery mode, "
-                 "we will no longer process this file");
+    logger.warning(__PRETTY_FUNCTION__,
+                   "IClang internal error, enable recovery mode, "
+                   "we will no longer process this file");
   }
   fini(global);
   return res;

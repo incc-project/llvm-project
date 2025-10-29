@@ -433,20 +433,10 @@ int CC1Command::Execute(ArrayRef<std::optional<StringRef>> Redirects,
   llvm::CrashRecoveryContext CRC;
   CRC.DumpStackAndCleanupOnFailure = true;
 
-  const void *PrettyState = llvm::SavePrettyStackState();
+  // const void *PrettyState = llvm::SavePrettyStackState();
   const Driver &D = getCreator().getToolChain().getDriver();
 
   // IClang begin
-  const auto &global = iclang::Global::getInstance();
-  if (!global.isEnabled()) {
-    int R = 0;
-    // Enter ExecuteCC1Tool() instead of starting up a new process
-    if (!CRC.RunSafely([&]() { R = D.CC1Main(Argv); })) {
-      llvm::RestorePrettyStackState(PrettyState);
-      return CRC.RetCode;
-    }
-    return R;
-  }
   return iclang::Driver::run(getSource().getKind(), getInputInfos(),
                              getOutputFilenames(), Argv, D);
   // IClang end

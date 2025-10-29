@@ -2,9 +2,11 @@ set(LLVM_LINK_COMPONENTS
   Option
   ProfileData
   Support
+  ILLVMSupport
+  ILLVMFuncVELF
   )
 
-add_clang_library(iClangDriver
+add_clang_library(clangIClangDriver
   Driver.cpp
   DriverBase.cpp
   IncDriver.cpp
@@ -16,9 +18,6 @@ add_clang_library(iClangDriver
 
   LINK_LIBS
   clangBasic
-  iClangSupport
-  iClangASTSupport
-  ILLVMSupport
-#  ILLVMFuncVELF
+  clangIClangSupport
   ${system_libs}
   )

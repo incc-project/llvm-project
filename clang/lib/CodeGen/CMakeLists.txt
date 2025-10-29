@@ -31,6 +31,9 @@ set(LLVM_LINK_COMPONENTS
   Target
   TargetParser
   TransformUtils
+  # IClang begin
+  ILLVMSupport
+  # IClang end
   )
 
 # Workaround for MSVC ARM64 performance regression:
@@ -172,9 +175,8 @@ add_clang_library(clangCodeGen
   clangLex
   clangSerialization
   # IClang begin
-  iClangSupport
-  iClangASTSupport
-  iClangCC1Driver
-  ILLVMSupport
+  clangIClangSupport
+  clangIClangASTSupport
+  clangIClangCC1Driver
   # IClang end
   )
