@@ -39,6 +39,10 @@ private:
                     const uint8_t *data);
 
 public:
+  RelocationSection(const RelocationSection &) = delete;
+  RelocationSection& operator=(const RelocationSection &) = delete;
+  RelocationSection(RelocationSection &&) = default;
+
   static OPtr<RelocationSection> create(const Elf_Shdr *shdr,
                                         const uint64_t _idx) {
     return OPtr<RelocationSection>(new RelocationSection(shdr, _idx));

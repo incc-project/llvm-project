@@ -36,6 +36,8 @@ private:
   static void check(const BinFile &binFile);
 
 public:
+  static llvm::Expected<ObjFile> loadObjFile(const std::string &objPath);
+
   // Load symbol table for FuncX.
   static llvm::Expected<std::unordered_set<std::string>>
   onlyLoadSymbolTable(const std::string &objPath);

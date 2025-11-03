@@ -36,6 +36,10 @@ private:
   GroupSection(const Elf_Shdr *shdr, const uint8_t _idx, const uint8_t *data);
 
 public:
+  GroupSection(const GroupSection &) = delete;
+  GroupSection& operator=(const GroupSection &) = delete;
+  GroupSection(GroupSection &&) = default;
+
   static OPtr<GroupSection>
   create(const Elf_Shdr *shdr, const uint8_t _idx, const uint8_t *data) {
     return OPtr<GroupSection>(new GroupSection(shdr, _idx, data));

@@ -42,6 +42,10 @@ private:
                      const uint8_t *_data);
 
 public:
+  StringTableSection(const StringTableSection &) = delete;
+  StringTableSection& operator=(const StringTableSection &) = delete;
+  StringTableSection(StringTableSection &&) = default;
+
   static OPtr<StringTableSection>
   create(const Elf_Shdr *shdr, const uint8_t _idx, const uint8_t *_data) {
     return OPtr<StringTableSection>(new StringTableSection(shdr, _idx, _data));

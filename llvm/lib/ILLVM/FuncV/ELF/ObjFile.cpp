@@ -233,10 +233,11 @@ llvm::Error ObjFile::initRef() {
 }
 
 ObjFile::ObjFile(const BinFile &_binFile, llvm::Error &err) : binFile(_binFile) {
+  llvm::ErrorAsOutParameter EAO(&err);
   parseHeader();
   parseSections();
-  err = initRef();
-  if (err) {
+  if (auto err2 = initRef()) {
+    err = std::move(err2);
     return;
   }
 }

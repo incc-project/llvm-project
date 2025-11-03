@@ -74,17 +74,21 @@ private:
 
   uint8_t getStInfo() const { return (st_bind << 4) + (st_type & 0xf); }
 
-public:
   Symbol(const uint32_t _st_name, const uint64_t _st_value,
-         const uint32_t _st_size, const uint8_t _st_info,
-         const uint8_t _st_other, const uint64_t _st_shndx, const uint64_t _idx)
-      : forRef(_st_name, _st_shndx), st_value(_st_value), st_size(_st_size),
-        st_bind(_st_info >> 4), st_type(_st_info & 0xf), st_other(_st_other),
-        idx(make_owner<IntRef>(_idx)) {}
+       const uint32_t _st_size, const uint8_t _st_info,
+       const uint8_t _st_other, const uint64_t _st_shndx, const uint64_t _idx)
+    : forRef(_st_name, _st_shndx), st_value(_st_value), st_size(_st_size),
+      st_bind(_st_info >> 4), st_type(_st_info & 0xf), st_other(_st_other),
+      idx(make_owner<IntRef>(_idx)) {}
 
+public:
   explicit Symbol(const Elf_Sym *elf_sym, const uint64_t _idx)
       : Symbol(elf_sym->st_name, elf_sym->st_value, elf_sym->st_size,
                elf_sym->st_info, elf_sym->st_other, elf_sym->st_shndx, _idx) {}
+
+  Symbol(const Symbol &) = delete;
+  Symbol& operator=(const Symbol &) = delete;
+  Symbol(Symbol &&) = default;
 
   std::string getName() const { return name->getValue(); }
 

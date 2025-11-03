@@ -30,9 +30,11 @@ private:
   std::streamsize fileSize;
 
 public:
-  BinFile() = delete;
-
   explicit BinFile(const std::string &path);
+
+  BinFile(const BinFile &) = delete;
+  BinFile& operator=(const BinFile &) = delete;
+  BinFile(BinFile &&) = default;
 
   ~BinFile() {
     if (fileData) {

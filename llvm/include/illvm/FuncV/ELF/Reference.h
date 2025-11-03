@@ -70,6 +70,10 @@ private:
 public:
   explicit IntRef(const uint64_t _value) : value(_value) {}
 
+  IntRef(const IntRef &) = delete;
+  IntRef& operator=(const IntRef &) = delete;
+  IntRef(IntRef &&) = default;
+
   uint64_t getValue() const { return value; }
 
   void setValue(const uint64_t _value) { value = _value; }
@@ -83,6 +87,10 @@ private:
 public:
   StrRef(const std::string &_value, const uint64_t _offset)
       : value(_value), offset(_offset) {}
+
+  StrRef(const StrRef &) = delete;
+  StrRef& operator=(const StrRef &) = delete;
+  StrRef(StrRef &&) = default;
 
   std::string getValue() const { return value; }
 

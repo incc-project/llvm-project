@@ -40,6 +40,10 @@ public:
       : length(_length), extLength(_extLength), ciePointer(_ciePointer),
         otherData(_otherData) {}
 
+  FDE(const FDE &) = delete;
+  FDE& operator=(const FDE &) = delete;
+  FDE(FDE &&) = default;
+
   uint32_t getCIEPointerPreFilling() const {
     if (length == 0xffffffff) {
       return sizeof(uint32_t) + sizeof(uint64_t);
@@ -119,6 +123,10 @@ public:
       : length(_length), extLength(_extLength), cieID(_cieID),
         otherData(_otherData) {}
 
+  CIE(const CIE &) = delete;
+  CIE& operator=(const CIE &) = delete;
+  CIE(CIE &&) = default;
+
   uint64_t getSize() const {
     if (length == 0xffffffff) {
       return extLength + sizeof(uint32_t) + sizeof(uint64_t);
@@ -160,6 +168,10 @@ public:
 
   CFI() = delete;
   explicit CFI(OPtr<CIE> &&_cie) : cie(std::move(_cie)) {}
+
+  CFI(const CFI &) = delete;
+  CFI& operator=(const CFI &) = delete;
+  CFI(CFI &&) = default;
 
   void write(uint8_t *&buffer) const;
 

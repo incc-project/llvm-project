@@ -39,6 +39,10 @@ private:
                  const uint8_t *data);
 
 public:
+  EhFrameSection(const EhFrameSection &) = delete;
+  EhFrameSection& operator=(const EhFrameSection &) = delete;
+  EhFrameSection(EhFrameSection &&) = default;
+
   static OPtr<EhFrameSection>
   create(const Elf_Shdr *shdr, const uint64_t _idx, const uint8_t *data) {
     return OPtr<EhFrameSection>(new EhFrameSection(shdr, _idx, data));

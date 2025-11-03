@@ -32,6 +32,10 @@ private:
       : Section(SectionType::Normal, shdr, _idx), data(_data) {}
 
 public:
+  NormalSection(const NormalSection &) = delete;
+  NormalSection& operator=(const NormalSection &) = delete;
+  NormalSection(NormalSection &&) = default;
+
   static OPtr<NormalSection> create(const Elf_Shdr *shdr, const uint64_t _idx,
                                     const uint8_t *_data) {
     return OPtr<NormalSection>(new NormalSection(shdr, _idx, _data));

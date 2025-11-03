@@ -41,15 +41,19 @@ void FuncV::check(const BinFile &binFile) {
                                        "file is too short");
 }
 
-llvm::Expected<std::unordered_set<std::string>>
-FuncV::onlyLoadSymbolTable(const std::string &objPath) {
+llvm::Expected<ObjFile> FuncV::loadObjFile(const std::string &objPath) {
   const BinFile binFile(objPath);
 
   check(binFile);
 
-  auto objFileOrErr = ObjFile::create(binFile);
+  return ObjFile::create(binFile);
+}
+
+llvm::Expected<std::unordered_set<std::string>>
+FuncV::onlyLoadSymbolTable(const std::string &objPath) {
+  auto objFileOrErr = loadObjFile(objPath);
   ILLVM_ETRANS(objFileOrErr.takeError());
-  auto &objFile = *objFileOrErr;
+  const auto &objFile = *objFileOrErr;
 
   std::unordered_set<std::string> res;
 
@@ -69,16 +73,10 @@ llvm::Error FuncV::run(const std::string &oldObjPath, const std::string &newObjP
                 const std::unordered_set<std::string> &funcXSet) {
   ILLVM_FCHECK(oldObjPath != newObjPath, "");
 
-  const BinFile oldBinFile(oldObjPath);
-  const BinFile newBinFile(newObjPath);
-
-  check(oldBinFile);
-  check(newBinFile);
-
-  // auto oldObjFileOrErr = ObjFile::create(oldBinFile);
+  // auto oldObjFileOrErr = loadObjFile(oldObjPath);
   // ILLVM_ETRANS(oldObjFileOrErr.takeError());
   // auto &oldObjFile = *oldObjFileOrErr;
-  auto newObjFileOrErr = ObjFile::create(newBinFile);
+  auto newObjFileOrErr = loadObjFile(newObjPath);
   ILLVM_ETRANS(newObjFileOrErr.takeError());
   auto &newObjFile = *newObjFileOrErr;
 

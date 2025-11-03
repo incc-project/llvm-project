@@ -38,14 +38,18 @@ private:
   BPtr<const Symbol> sym;
   const int64_t r_addend;
 
-public:
   Relocation(const uint64_t _r_offset, const uint64_t r_info,
              const int64_t _r_addend)
       : forRef(r_info >> 32), r_offset(_r_offset), typeInfo(r_info & 0x0ff),
         r_addend(_r_addend) {}
 
+public:
   explicit Relocation(const Elf_Rela *elf_rela)
       : Relocation(elf_rela->r_offset, elf_rela->r_info, elf_rela->r_addend) {}
+
+  Relocation(const Relocation &) = delete;
+  Relocation& operator=(const Relocation &) = delete;
+  Relocation(Relocation &&) = default;
 
   uint64_t getROffset() const { return r_offset; }
 

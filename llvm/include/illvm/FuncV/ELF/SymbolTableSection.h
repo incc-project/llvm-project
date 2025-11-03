@@ -40,6 +40,10 @@ private:
                      const uint8_t *data);
 
 public:
+  ExtSymTabSection(const ExtSymTabSection &) = delete;
+  ExtSymTabSection& operator=(const ExtSymTabSection &) = delete;
+  ExtSymTabSection(ExtSymTabSection &&) = default;
+
   static OPtr<ExtSymTabSection> create(const Elf_Shdr *shdr,
                                          const uint64_t _idx) {
     return OPtr<ExtSymTabSection>(new ExtSymTabSection(shdr, _idx));
@@ -78,6 +82,10 @@ private:
                      const uint8_t *data);
 
 public:
+  SymbolTableSection(const SymbolTableSection &) = delete;
+  SymbolTableSection& operator=(const SymbolTableSection &) = delete;
+  SymbolTableSection(SymbolTableSection &&) = default;
+
   static OPtr<SymbolTableSection>
   create(const Elf_Shdr *shdr, const uint64_t _idx, const uint8_t *_data) {
     return OPtr<SymbolTableSection>(new SymbolTableSection(shdr, _idx, _data));

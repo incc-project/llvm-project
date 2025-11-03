@@ -76,6 +76,10 @@ private:
   ObjFile(const BinFile &_binFile, llvm::Error &err);
 
 public:
+  ObjFile(const ObjFile &) = delete;
+  ObjFile& operator=(const ObjFile &) = delete;
+  ObjFile(ObjFile &&) = default;
+
   static llvm::Expected<ObjFile> create(const BinFile &_binFile) {
     llvm::Error err = llvm::Error::success();
     ObjFile objFile(_binFile, err);

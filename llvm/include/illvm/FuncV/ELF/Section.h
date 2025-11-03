@@ -84,6 +84,9 @@ protected:
   virtual void writeDataImpl(uint8_t *buffer) const = 0;
 
 public:
+  Section(const Section &) = delete;
+  Section& operator=(const Section &) = delete;
+  Section(Section &&) = default;
   virtual ~Section() = default;
 
   SectionType getType() const { return type; }
