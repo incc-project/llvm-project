@@ -117,7 +117,7 @@ public:
       iClangMode = IClangMode::TestMode;
     } else if (iClangModeStr == "Profile") {
       iClangMode = IClangMode::ProfileMode;
-    } else if (iClangModeStr == "Clang") {
+    } else if (iClangModeStr == "Clang" || iClangModeStr.empty()) {
       iClangMode = IClangMode::ClangMode;
     } else {
       ILLVM_FCHECK(false, "Unknown iClangMode: " + iClangModeStr);
