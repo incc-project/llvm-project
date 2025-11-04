@@ -232,6 +232,20 @@ class TestMetaData final : public MetaData {
 public:
 };
 
+class LineMacroTestMetaData final : public MetaData {
+public:
+  unsigned totalFuncNum = 0;
+  unsigned funcWithLineMacroNum = 0;
+
+  // Format:
+  // MetaData
+  // totalFuncNum
+  // funcWithLineMacroNum
+  llvm::json::Object serialize() const override;
+
+  void deserialize(llvm::json::Object &root) override;
+};
+
 } // namespace iclang
 
 #endif //ICLANG_METADATA_H

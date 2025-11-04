@@ -10,12 +10,14 @@ namespace iclang {
 int ShareMasterDriver::run(
     Global &global, const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {
+  ILLVM_FCHECK(false, "We haven't implemented ShareMasterDriver yet");
   return 0;
 }
 
 int ShareClientDriver::run(
     Global &global, const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {
+  ILLVM_FCHECK(false, "We haven't implemented ShareClientDriver yet");
   return 0;
 }
 

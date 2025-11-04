@@ -41,6 +41,9 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
   if (iClangMode == IClangMode::TestMode) {
     return TestDriver::run(global, originalArgv, clangDriver);
   }
+  if (iClangMode == IClangMode::LineMacroTestMode) {
+    return LineMacroTestDriver::run(global, originalArgv, clangDriver);
+  }
   if (iClangMode == IClangMode::ProfileMode) {
     return ProfileDriver::run(global, originalArgv, clangDriver);
   }

@@ -140,4 +140,20 @@ void ShareTestMetaData::deserialize(llvm::json::Object &root) {
   funcXedPPLoc = root["funcXedPPLoc"].getAsInteger().value();
 }
 
+llvm::json::Object LineMacroTestMetaData::serialize() const {
+  auto root = MetaData::serialize();
+
+  root["totalFuncNum"] = totalFuncNum;
+  root["funcWithLineMacroNum"] = funcWithLineMacroNum;
+
+  return root;
+}
+
+void LineMacroTestMetaData::deserialize(llvm::json::Object &root) {
+  MetaData::deserialize(root);
+
+  totalFuncNum = root["totalFuncNum"].getAsInteger().value();
+  funcWithLineMacroNum = root["funcWithLineMacroNum"].getAsInteger().value();
+}
+
 } // namespace iclang

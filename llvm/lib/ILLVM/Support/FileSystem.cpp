@@ -212,6 +212,7 @@ static void mvDirDFS(const std::string &baseFromDirPath,
 void FileSystem::mvFile(const std::string &from, const std::string &to) {
   ILLVM_FCHECK(checkFileExists(from),
                "mv " + from + " to " + to + " failed: from does not exist")
+  rmFile(to);
   if (llvm::sys::fs::is_regular_file(from)) {
     mvSingleFile(from, to);
   } else if (llvm::sys::fs::is_directory(from)) {

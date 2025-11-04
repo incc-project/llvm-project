@@ -13,6 +13,9 @@
 #ifndef ICLANG_CC1DRIVERBASE_H
 #define ICLANG_CC1DRIVERBASE_H
 
+#include "iclang/ASTSupport/ASTGlobal.h"
+#include "iclang/Support/Global.h"
+
 namespace iclang {
 
 } // namespace iclang

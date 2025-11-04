@@ -59,6 +59,8 @@
 #include "illvm/Support/Time.h"
 // IClang end
 
+#include "iclang/CC1Driver/TestCC1Driver.h"
+
 #include <optional>
 using namespace clang;
 using namespace llvm;
@@ -262,6 +264,8 @@ void BackendConsumer::HandleTranslationUnit(ASTContext &C) {
 
     if (global.isIClangMode(iclang::IClangMode::ShareTestMode)) {
       iclang::ShareTestCC1Driver::run();
+    } else if (global.isIClangMode(iclang::IClangMode::LineMacroTestMode)) {
+      iclang::LineMacroTestCC1Driver::run();
     }
   }
   // IClang end

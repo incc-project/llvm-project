@@ -21,9 +21,10 @@ namespace iclang {
 namespace funcx {
 
 class TestAnalysis : public clang::RecursiveASTVisitor<TestAnalysis> {
-public:
+private:
   ASTGlobal &astGlobal;
 
+public:
   explicit TestAnalysis(ASTGlobal &_astGlobal) : astGlobal(_astGlobal) {}
 
   int depth = 0;
@@ -37,6 +38,28 @@ public:
   bool TraverseDecl(clang::Decl *decl);
 
   bool TraverseStmt(clang::Stmt *stmt, DataRecursionQueue *queue = nullptr);
+};
+
+class LineMacroTestAnalysis : public clang::RecursiveASTVisitor<LineMacroTestAnalysis> {
+private:
+  ASTGlobal &astGlobal;
+  unsigned totalFuncNum = 0;
+  unsigned funcWithLineMacroNum = 0;
+
+public:
+  explicit LineMacroTestAnalysis(ASTGlobal &_astGlobal) : astGlobal(_astGlobal) {}
+
+  bool shouldVisitTemplateInstantiations() const { return false; }
+
+  bool shouldVisitImplicitCode() const { return true; }
+
+  bool TraverseDecl(clang::Decl *decl);
+
+  bool TraverseStmt(clang::Stmt *stmt, DataRecursionQueue *queue = nullptr);
+
+  unsigned getTotalFuncNum() const { return totalFuncNum; }
+
+  unsigned getFuncWithLineMacroNum() const { return funcWithLineMacroNum; }
 };
 
 } // namespace funcx

@@ -39,6 +39,7 @@ enum class IClangMode {
   ShareClientMode,
   ShareTestMode,
   TestMode,
+  LineMacroTestMode,
   ProfileMode,
   ClangMode
 };
@@ -91,6 +92,8 @@ public:
       metaData = illvm::make_owner<ShareTestMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::TestMode) {
       metaData = illvm::make_owner<TestMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::LineMacroTestMode) {
+      metaData = illvm::make_owner<LineMacroTestMetaData>().moveTo<MetaData>();
     } else {
       metaData = illvm::make_owner<MetaData>();
     }
@@ -115,6 +118,8 @@ public:
       iClangMode = IClangMode::ShareTestMode;
     } else if (iClangModeStr == "Test") {
       iClangMode = IClangMode::TestMode;
+    } else if (iClangModeStr == "LineMacroTest") {
+      iClangMode = IClangMode::LineMacroTestMode;
     } else if (iClangModeStr == "Profile") {
       iClangMode = IClangMode::ProfileMode;
     } else if (iClangModeStr == "Clang" || iClangModeStr.empty()) {

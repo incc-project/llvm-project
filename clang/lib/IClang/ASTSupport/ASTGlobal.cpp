@@ -25,6 +25,9 @@ void ASTGlobal::init(const Global &global, clang::ASTContext *_context) {
         illvm::make_owner<ShareTestASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::TestMode) {
     astMetaData = illvm::make_owner<TestASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::LineMacroTestMode) {
+    astMetaData =
+        illvm::make_owner<LineMacroTestASTMetaData>().moveTo<ASTMetaData>();
   } else {
     astMetaData = illvm::make_owner<ASTMetaData>();
   }

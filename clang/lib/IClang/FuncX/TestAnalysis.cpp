@@ -105,5 +105,14 @@ bool TestAnalysis::TraverseStmt(clang::Stmt *stmt, DataRecursionQueue *queue) {
   return RecursiveASTVisitor::TraverseStmt(stmt, queue);
 }
 
+bool LineMacroTestAnalysis::TraverseDecl(clang::Decl *decl) {
+  return RecursiveASTVisitor::TraverseDecl(decl);
+}
+
+bool LineMacroTestAnalysis::TraverseStmt(clang::Stmt *stmt,
+                                         DataRecursionQueue *queue) {
+  return RecursiveASTVisitor::TraverseStmt(stmt, queue);
+}
+
 } // namespace funcx
 } // namespace iclang

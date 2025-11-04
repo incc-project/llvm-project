@@ -50,6 +50,11 @@ class TestASTMetaData final : public ASTMetaData {
 public:
 };
 
+class LineMacroTestASTMetaData final : public ASTMetaData {
+public:
+};
+
+
 } // namespace iclang
 
 #endif // ICLANG_ASTMETADATA_H

@@ -15,6 +15,11 @@
 
 namespace iclang {
 
+class LineMacroTestCC1Driver {
+public:
+  static void run();
+};
+
 } // namespace iclang
 
 #endif //ICLANG_TESTCC1DRIVER_H

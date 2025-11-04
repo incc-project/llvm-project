@@ -59,7 +59,7 @@ private:
   llvm::handleAllErrors(RERR, [&](const llvm::ErrorInfoBase &errInfo) {        \
     illvm::Logger::getInstance().fatal(                                        \
         __PRETTY_FUNCTION__,                                                   \
-        llvm::formatv("{1}: {2}", MSG, errInfo.message()).str());              \
+        llvm::formatv("{0}: {1}", MSG, errInfo.message()).str());              \
   });
 
 } // namespace illvm

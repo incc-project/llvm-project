@@ -7,11 +7,11 @@
 namespace iclang {
 
 void ShareMasterCC1Driver::run() {
-
+  ILLVM_FCHECK(false, "We haven't implemented ShareMasterCC1Driver yet");
 }
 
 void ShareClientCC1Driver::run() {
-
+  ILLVM_FCHECK(false, "We haven't implemented ShareClientCC1Driver yet");
 }
 
 void ShareTestCC1Driver::run() {

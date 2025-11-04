@@ -24,6 +24,13 @@ public:
                  const clang::driver::Driver &clangDriver);
 };
 
+class LineMacroTestDriver {
+public:
+  static int run(Global &global,
+                 const llvm::SmallVector<const char *, 128> &originalArgv,
+                 const clang::driver::Driver &clangDriver);
+};
+
 class ProfileDriver {
 public:
   static int run(Global &global,
