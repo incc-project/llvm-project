@@ -7,7 +7,7 @@
 
 namespace iclang {
 
-void ASTGlobal::init(const Global &global, clang::ASTContext *_context) {
+void ASTGlobal::init(const Global &global, clang::Sema *_sema) {
   iClangMode = global.getIClangMode();
   std::unique_ptr<ASTMetaData> ptr;
   if (iClangMode == IClangMode::IncMode) {
@@ -31,13 +31,9 @@ void ASTGlobal::init(const Global &global, clang::ASTContext *_context) {
   } else {
     astMetaData = illvm::make_owner<ASTMetaData>();
   }
-  context = _context;
-  astNameGenerator = std::make_unique<clang::ASTNameGenerator>(*_context);
-}
-
-clang::ASTContext &ASTGlobal::getContext() const {
-  assert(context != nullptr);
-  return *context;
+  sema = _sema;
+  astNameGenerator =
+      std::make_unique<clang::ASTNameGenerator>(sema->getASTContext());
 }
 
 std::string ASTGlobal::getMangledName(const clang::NamedDecl *decl) const {
@@ -61,7 +57,7 @@ ASTGlobal::getDeclSourceInterval(const clang::Decl *decl) const {
   res.isValid = false;
 
   const auto sr = decl->getSourceRange();
-  const auto &sm = context->getSourceManager();
+  const auto &sm =  getSourceManager();
 
   // start
   const clang::FullSourceLoc startFullSourceLoc(sr.getBegin(), sm);
@@ -73,7 +69,7 @@ ASTGlobal::getDeclSourceInterval(const clang::Decl *decl) const {
 
   // end
   const clang::SourceLocation endSourceLoc = clang::Lexer::getLocForEndOfToken(
-      sr.getEnd(), 0, sm, context->getLangOpts());
+      sr.getEnd(), 0, sm, getLangOpts());
   const clang::FullSourceLoc endFullSourceLoc(endSourceLoc, sm);
   if (endFullSourceLoc.isInvalid()) {
     return res;

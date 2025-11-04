@@ -16,18 +16,16 @@
 #include <string>
 #include <vector>
 
-#include "clang/Sema/Sema.h"
-
 namespace iclang {
 
 class IncCC1Driver {
 public:
-  static void run(clang::Sema *sema);
+  static void run();
 };
 
 class IncTestCC1Driver {
 public:
-  static void run(clang::Sema *sema);
+  static void run();
 };
 
 } // namespace iclang

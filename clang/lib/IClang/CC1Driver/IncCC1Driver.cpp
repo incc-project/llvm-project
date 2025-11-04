@@ -81,9 +81,12 @@ static void recordHeader(illvm::BPtr<IncMetaData> &metaData,
   }
 }
 
-static void runBase(clang::Sema *sema, illvm::BPtr<IncMetaData> &metaData,
+static void
+runBase(illvm::BPtr<IncMetaData> &metaData,
         const std::optional<illvm::BPtr<const IncTestMetaData>> &testMetaData,
         ASTGlobal &astGlobal) {
+  auto &sema = astGlobal.getSema();
+
   // Step6. Record top include region and header timestamp (!incFlag).
   if (!metaData->incFlag) {
     recordHeader(metaData, astGlobal.getContext());
@@ -95,7 +98,7 @@ static void runBase(clang::Sema *sema, illvm::BPtr<IncMetaData> &metaData,
 
     funcx::ReusableInstAnalysis reusableInstAnalysis(metaData.copy(),
                                                      astGlobal);
-    reusableInstAnalysis.run(sema->PendingInstantiations);
+    reusableInstAnalysis.run(sema.PendingInstantiations);
 
     if (testMetaData.has_value()) {
       illvm::FileSystem::saveSet(testMetaData.value()->funcXTxtPath,
@@ -107,10 +110,10 @@ static void runBase(clang::Sema *sema, illvm::BPtr<IncMetaData> &metaData,
     metaData->funcXTime = duration.count();
   }
 
-  sema->PerformPendingInstantiations();
+  sema.PerformPendingInstantiations();
 }
 
-void IncCC1Driver::run(clang::Sema *sema) {
+void IncCC1Driver::run() {
   auto &global = Global::getInstance();
 
   assert(global.getIClangMode() == IClangMode::IncMode);
@@ -119,10 +122,10 @@ void IncCC1Driver::run(clang::Sema *sema) {
 
   auto metaData = global.getMetaData<IncMetaData>();
 
-  runBase(sema, metaData, std::nullopt, astGlobal);
+  runBase(metaData, std::nullopt, astGlobal);
 }
 
-void IncTestCC1Driver::run(clang::Sema *sema) {
+void IncTestCC1Driver::run() {
   auto &global = Global::getInstance();
 
   assert(global.getIClangMode() == IClangMode::IncTestMode);
@@ -131,7 +134,7 @@ void IncTestCC1Driver::run(clang::Sema *sema) {
 
   auto metaData = global.getMetaData<IncMetaData>();
 
-  runBase(sema, metaData, metaData.constCopyTo<IncTestMetaData>(), astGlobal);
+  runBase(metaData, metaData.constCopyTo<IncTestMetaData>(), astGlobal);
 }
 
 } // namespace iclang

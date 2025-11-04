@@ -76,7 +76,7 @@ private:
   illvm::BPtr<IncMetaData> incMetaData;
   ASTGlobal &astGlobal;
 
-  clang::SourceManager &sourceManager;
+  const clang::SourceManager &sourceManager;
   std::unordered_map<const clang::Decl *, bool> checkRecord;
 
   // Traverse types and extract all included CXXRecordDecl.
@@ -119,7 +119,7 @@ public:
   explicit ReusableInstAnalysis(
       illvm::BPtr<IncMetaData> &&_incMetaData, ASTGlobal &_astGlobal)
       : incMetaData(std::move(_incMetaData)), astGlobal(_astGlobal),
-        sourceManager(astGlobal.getContext().getSourceManager()) {}
+        sourceManager(astGlobal.getSourceManager()) {}
 
   void run(std::deque<VSPair> &pendingInstQue);
 };

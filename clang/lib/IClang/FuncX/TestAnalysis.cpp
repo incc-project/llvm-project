@@ -3,6 +3,10 @@
 #include <iomanip>
 #include <sstream>
 
+#include "clang/AST/Expr.h"
+#include "clang/Lex/Lexer.h"
+#include "clang/Lex/Preprocessor.h"
+
 namespace iclang {
 namespace funcx {
 
@@ -106,11 +110,44 @@ bool TestAnalysis::TraverseStmt(clang::Stmt *stmt, DataRecursionQueue *queue) {
 }
 
 bool LineMacroTestAnalysis::TraverseDecl(clang::Decl *decl) {
-  return RecursiveASTVisitor::TraverseDecl(decl);
+  if (!decl) {
+    return true;
+  }
+  auto *funcDecl = llvm::dyn_cast<clang::FunctionDecl>(decl);
+  if (funcDecl == nullptr) {
+    return RecursiveASTVisitor::TraverseDecl(decl);
+  }
+  if (!astGlobal.isMainFileDecl(funcDecl)) {
+    return RecursiveASTVisitor::TraverseDecl(decl);
+  }
+  inFunc = true;
+  llvm::errs() << funcDecl->getNameAsString() << "\n";
+  int res = RecursiveASTVisitor::TraverseDecl(decl);
+  inFunc = false;
+  return res;
 }
 
 bool LineMacroTestAnalysis::TraverseStmt(clang::Stmt *stmt,
                                          DataRecursionQueue *queue) {
+  if (stmt == nullptr || !inFunc) {
+    return true;
+  }
+  if (const auto *sourceLocExpr = llvm::dyn_cast<clang::SourceLocExpr>(stmt)) {
+    llvm::errs() << "sourceLocExpr: " << (sourceLocExpr->getIdentKind() == clang::SourceLocIdentKind::Line) << "\n";
+  } else if (const auto *integerLiteralExpr = llvm::dyn_cast<clang::IntegerLiteral>(stmt)) {
+    llvm::errs() << "integerLiteralExpr: ";
+    clang::SourceLocation loc = integerLiteralExpr->getLocation();
+    if (loc.isValid() && loc.isMacroID()) {
+      auto &sm = astGlobal.getSourceManager();
+      auto &langOpts = astGlobal.getLangOpts();
+      while (loc.isMacroID()) {
+        std::string macroName = clang::Lexer::getImmediateMacroName(loc, sm, langOpts).str();
+        llvm::errs() << macroName << ": ";
+        loc = sm.getImmediateMacroCallerLoc(loc);
+      }
+    }
+    llvm::errs() << "\n";
+  }
   return RecursiveASTVisitor::TraverseStmt(stmt, queue);
 }
 

@@ -16,6 +16,7 @@
 #include "iclang/ASTSupport/ASTGlobal.h"
 
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/Lex/Preprocessor.h"
 
 namespace iclang {
 namespace funcx {
@@ -45,9 +46,11 @@ private:
   ASTGlobal &astGlobal;
   unsigned totalFuncNum = 0;
   unsigned funcWithLineMacroNum = 0;
+  bool inFunc = false;
 
 public:
-  explicit LineMacroTestAnalysis(ASTGlobal &_astGlobal) : astGlobal(_astGlobal) {}
+  explicit LineMacroTestAnalysis(ASTGlobal &_astGlobal)
+      : astGlobal(_astGlobal) {}
 
   bool shouldVisitTemplateInstantiations() const { return false; }
 

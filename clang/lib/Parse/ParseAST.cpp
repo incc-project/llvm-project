@@ -153,7 +153,7 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   // IClang begin
   const auto &global = iclang::Global::getInstance();
   auto &astGlobal = iclang::ASTGlobal::getInstance();
-  astGlobal.init(global, &S.getASTContext());
+  astGlobal.init(global, &S);
   // IClang end
 
   // If a PCH through header is specified that does not have an include in
