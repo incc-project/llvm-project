@@ -54,5 +54,6 @@ add_clang_subdirectory(libclang)
 add_clang_subdirectory(offload-arch)
 
 # IClang begin
+add_clang_subdirectory(iclang-sta)
 add_clang_subdirectory(iclang-test)
 # IClang end
