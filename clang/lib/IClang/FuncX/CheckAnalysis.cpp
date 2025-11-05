@@ -53,10 +53,12 @@ bool LineMacroCheckAnalysis::TraverseStmt(clang::Stmt *stmt,
     auto &sm = astGlobal.getSourceManager();
     auto &langOpts = astGlobal.getLangOpts();
     const clang::SourceLocation loc = integerLiteralExpr->getLocation();
-    const std::string macroName =
+    if (loc.isValid() && loc.isMacroID()) {
+      const std::string macroName =
         clang::Lexer::getImmediateMacroName(loc, sm, langOpts).str();
-    if (macroName == "__LINE__") {
-      funcsWithLineMacro.insert(curFuncDecl);
+      if (macroName == "__LINE__") {
+        funcsWithLineMacro.insert(curFuncDecl);
+      }
     }
   }
   return RecursiveASTVisitor::TraverseStmt(stmt, queue);
