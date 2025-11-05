@@ -4314,13 +4314,13 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
 
   // IClang begin
   auto &global = iclang::Global::getInstance();
-  if (global.isIClangMode(iclang::IClangMode::ShareTestMode)) {
-    const auto metaData = global.getMetaData<iclang::ShareTestMetaData>();
+  if (global.isIClangMode(iclang::IClangMode::ShareCheckMode)) {
+    const auto metaData = global.getMetaData<iclang::ShareCheckMetaData>();
     const auto *funcDecl = llvm::dyn_cast<clang::FunctionDecl>(D);
     if (metaData->enableRefedSymbolAnalysisFlag && funcDecl) {
       auto &astGlobal = iclang::ASTGlobal::getInstance();
       auto astMetaData =
-          astGlobal.getASTMetaData<iclang::ShareTestASTMetaData>();
+          astGlobal.getASTMetaData<iclang::ShareCheckASTMetaData>();
       astMetaData->addEmitGlobalFuncDef(funcDecl);
     }
   }

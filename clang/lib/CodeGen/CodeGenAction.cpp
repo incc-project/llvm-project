@@ -59,7 +59,7 @@
 #include "illvm/Support/Time.h"
 // IClang end
 
-#include "iclang/CC1Driver/TestCC1Driver.h"
+#include "iclang/CC1Driver/CheckCC1Driver.h"
 
 #include <optional>
 using namespace clang;
@@ -262,10 +262,14 @@ void BackendConsumer::HandleTranslationUnit(ASTContext &C) {
     metaData->midTs = illvm::Time::currentTsMs();
     metaData->frontTimeMs = metaData->midTs - metaData->startTs;
 
-    if (global.isIClangMode(iclang::IClangMode::ShareTestMode)) {
-      iclang::ShareTestCC1Driver::run();
-    } else if (global.isIClangMode(iclang::IClangMode::LineMacroTestMode)) {
-      iclang::LineMacroTestCC1Driver::run();
+    if (global.isIClangMode(iclang::IClangMode::ShareCheckMode)) {
+      iclang::ShareCheckCC1Driver::run();
+    } else if (global.isIClangMode(iclang::IClangMode::LineMacroCheckMode)) {
+      iclang::LineMacroCheckCC1Driver::run();
+    } else if (global.isIClangMode(iclang::IClangMode::DumpMode)) {
+      iclang::DumpCC1Driver::run();
+    } else if (global.isIClangMode(iclang::IClangMode::ProfileMode)) {
+      iclang::ProfileCC1Driver::run();
     }
   }
   // IClang end

@@ -97,7 +97,7 @@ public:
                  const clang::driver::Driver &clangDriver);
 };
 
-class IncTestDriver {
+class IncCheckDriver {
 public:
   static int run(Global &global,
                  const llvm::SmallVector<const char *, 128> &originalArgv,

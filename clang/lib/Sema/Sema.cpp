@@ -1240,8 +1240,8 @@ void Sema::ActOnEndOfTranslationUnitFragment(TUFragmentKind Kind) {
     auto iClangMode = global.getIClangMode();
     if (iClangMode == iclang::IClangMode::IncMode) {
       iclang::IncCC1Driver::run();
-    } else if (iClangMode == iclang::IClangMode::IncTestMode) {
-      iclang::IncTestCC1Driver::run();
+    } else if (iClangMode == iclang::IClangMode::IncCheckMode) {
+      iclang::IncCheckCC1Driver::run();
     } else {
       PerformPendingInstantiations();
     }

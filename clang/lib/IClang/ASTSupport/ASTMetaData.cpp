@@ -5,7 +5,7 @@
 
 namespace iclang {
 
-void ShareTestASTMetaData::addEmitGlobalFuncDef(
+void ShareCheckASTMetaData::addEmitGlobalFuncDef(
     const clang::FunctionDecl *funcDecl) {
   emitGlobalFuncDefs.insert(funcDecl->getCanonicalDecl());
 }

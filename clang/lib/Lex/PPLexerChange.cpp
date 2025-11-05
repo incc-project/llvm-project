@@ -107,8 +107,8 @@ bool Preprocessor::EnterSourceFile(FileID FID, ConstSearchDirIterator CurDir,
       metaData->hackedMainBuffer = metaData->hackMainBuffer(
           metaData->hackedMainBuffer, metaData->topIncludeRegion);
       metaData->hackedMainBufferRef = metaData->hackedMainBuffer;
-      if (global.isIClangMode(iclang::IClangMode::IncTestMode)) {
-        const auto testMetaData = metaData.copyTo<iclang::IncTestMetaData>();
+      if (global.isIClangMode(iclang::IClangMode::IncCheckMode)) {
+        const auto testMetaData = metaData.copyTo<iclang::IncCheckMetaData>();
         illvm::FileSystem::saveStr(testMetaData->cacheSrcPath,
                                    metaData->hackedMainBuffer);
       }

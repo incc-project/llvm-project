@@ -12,22 +12,24 @@ void ASTGlobal::init(const Global &global, clang::Sema *_sema) {
   std::unique_ptr<ASTMetaData> ptr;
   if (iClangMode == IClangMode::IncMode) {
     astMetaData = illvm::make_owner<IncASTMetaData>().moveTo<ASTMetaData>();
-  } else if (iClangMode == IClangMode::IncTestMode) {
-    astMetaData = illvm::make_owner<IncTestASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::IncCheckMode) {
+    astMetaData = illvm::make_owner<IncCheckASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareMasterMode) {
     astMetaData =
         illvm::make_owner<ShareMasterASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareClientMode) {
     astMetaData =
         illvm::make_owner<ShareClientASTMetaData>().moveTo<ASTMetaData>();
-  } else if (iClangMode == IClangMode::ShareTestMode) {
+  } else if (iClangMode == IClangMode::ShareCheckMode) {
     astMetaData =
-        illvm::make_owner<ShareTestASTMetaData>().moveTo<ASTMetaData>();
-  } else if (iClangMode == IClangMode::TestMode) {
-    astMetaData = illvm::make_owner<TestASTMetaData>().moveTo<ASTMetaData>();
-  } else if (iClangMode == IClangMode::LineMacroTestMode) {
+        illvm::make_owner<ShareCheckASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::LineMacroCheckMode) {
     astMetaData =
-        illvm::make_owner<LineMacroTestASTMetaData>().moveTo<ASTMetaData>();
+        illvm::make_owner<LineMacroCheckASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::DumpMode) {
+    astMetaData = illvm::make_owner<DumpASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::ProfileMode) {
+    astMetaData = illvm::make_owner<ProfileASTMetaData>().moveTo<ASTMetaData>();
   } else {
     astMetaData = illvm::make_owner<ASTMetaData>();
   }

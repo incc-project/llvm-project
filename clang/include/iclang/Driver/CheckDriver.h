@@ -1,4 +1,4 @@
-//===--- TestDriver.h - IClang test driver -------------------------------===//
+//===--- CheckDriver.h - IClang check driver -------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,25 +6,25 @@
 //
 //===----------------------------------------------------------------------===/
 //
-// IClang test driver.
+// IClang check driver.
 //
 //===----------------------------------------------------------------------===/
 
-#ifndef TESTDRIVER_H
-#define TESTDRIVER_H
+#ifndef ICLANG_CHECKDRIVER_H
+#define ICLANG_CHECKDRIVER_H
 
 #include "iclang/Driver/DriverBase.h"
 
 namespace iclang {
 
-class TestDriver {
+class LineMacroCheckDriver {
 public:
   static int run(Global &global,
                  const llvm::SmallVector<const char *, 128> &originalArgv,
                  const clang::driver::Driver &clangDriver);
 };
 
-class LineMacroTestDriver {
+class DumpDriver {
 public:
   static int run(Global &global,
                  const llvm::SmallVector<const char *, 128> &originalArgv,
@@ -40,4 +40,4 @@ public:
 
 } // namespace iclang
 
-#endif //TESTDRIVER_H
+#endif //ICLANG_CHECKDRIVER_H

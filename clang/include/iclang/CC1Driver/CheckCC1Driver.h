@@ -1,4 +1,4 @@
-//===--- TestCC1Driver.h - IClang cc1 driver for testing -----------------===//
+//===--- CheckCC1Driver.h - IClang cc1 driver for checking -----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,20 +6,30 @@
 //
 //===----------------------------------------------------------------------===/
 //
-// IClang cc1 driver for testing.
+// IClang cc1 driver for checking.
 //
 //===----------------------------------------------------------------------===/
 
-#ifndef ICLANG_TESTCC1DRIVER_H
-#define ICLANG_TESTCC1DRIVER_H
+#ifndef ICLANG_CHECKCC1DRIVER_H
+#define ICLANG_CHECKCC1DRIVER_H
 
 namespace iclang {
 
-class LineMacroTestCC1Driver {
+class LineMacroCheckCC1Driver {
+public:
+  static void run();
+};
+
+class DumpCC1Driver {
+public:
+  static void run();
+};
+
+class ProfileCC1Driver {
 public:
   static void run();
 };
 
 } // namespace iclang
 
-#endif //ICLANG_TESTCC1DRIVER_H
+#endif //ICLANG_CHECKCC1DRIVER_H

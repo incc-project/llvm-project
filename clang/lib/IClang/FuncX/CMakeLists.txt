@@ -7,9 +7,9 @@ set(LLVM_LINK_COMPONENTS
 
 add_clang_library(clangIClangFuncX
   BasicAnalysis.cpp
+  CheckAnalysis.cpp
   RefSymbolAnalysis.cpp
   ReusableInstAnalysis.cpp
-  TestAnalysis.cpp
 
   DEPENDS
   ClangDriverOptions

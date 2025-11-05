@@ -118,7 +118,7 @@ void IncMetaData::deserialize(llvm::json::Object &root) {
   }
 }
 
-llvm::json::Object ShareTestMetaData::serialize() const {
+llvm::json::Object ShareCheckMetaData::serialize() const {
   auto root = MetaData::serialize();
 
   root["originalTimeMs"] = originalTimeMs;
@@ -130,7 +130,7 @@ llvm::json::Object ShareTestMetaData::serialize() const {
   return root;
 }
 
-void ShareTestMetaData::deserialize(llvm::json::Object &root) {
+void ShareCheckMetaData::deserialize(llvm::json::Object &root) {
   MetaData::deserialize(root);
 
   originalTimeMs = root["originalTimeMs"].getAsInteger().value();
@@ -140,7 +140,7 @@ void ShareTestMetaData::deserialize(llvm::json::Object &root) {
   funcXedPPLoc = root["funcXedPPLoc"].getAsInteger().value();
 }
 
-llvm::json::Object LineMacroTestMetaData::serialize() const {
+llvm::json::Object LineMacroCheckMetaData::serialize() const {
   auto root = MetaData::serialize();
 
   root["totalFuncNum"] = totalFuncNum;
@@ -149,7 +149,7 @@ llvm::json::Object LineMacroTestMetaData::serialize() const {
   return root;
 }
 
-void LineMacroTestMetaData::deserialize(llvm::json::Object &root) {
+void LineMacroCheckMetaData::deserialize(llvm::json::Object &root) {
   MetaData::deserialize(root);
 
   totalFuncNum = root["totalFuncNum"].getAsInteger().value();

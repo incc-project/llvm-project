@@ -25,7 +25,7 @@ public:
   static void run();
 };
 
-class ShareTestCC1Driver {
+class ShareCheckCC1Driver {
 public:
   static void run();
 };

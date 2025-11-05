@@ -42,7 +42,7 @@ checkArgs(const llvm::SmallVector<const char *, 128> &originalArgv) {
 
 static void
 configPaths(illvm::BPtr<IncMetaData> &metaData,
-            std::optional<illvm::BPtr<IncTestMetaData>> &testMetaData) {
+            std::optional<illvm::BPtr<IncCheckMetaData>> &checkMetaData) {
   const auto preWorkPath = metaData->iClangDirPath[PrevDir];
   const auto workPath = metaData->iClangDirPath[CurDir];
 
@@ -58,29 +58,29 @@ configPaths(illvm::BPtr<IncMetaData> &metaData,
       illvm::FileSystem::linkPath(workPath, "iclang.h");
   metaData->prevOPath = illvm::FileSystem::linkPath(workPath, "prev.o");
 
-  if (!testMetaData.has_value()) {
+  if (!checkMetaData.has_value()) {
     return;
   }
 
-  testMetaData.value()->cacheSrcPath =
+  checkMetaData.value()->cacheSrcPath =
       illvm::FileSystem::linkPath(workPath, "iclang.cpp");
-  testMetaData.value()->partialOPath =
+  checkMetaData.value()->partialOPath =
       illvm::FileSystem::linkPath(workPath, "partial.o");
-  testMetaData.value()->outputOPath =
+  checkMetaData.value()->outputOPath =
       illvm::FileSystem::linkPath(workPath, "output.o");
-  testMetaData.value()->funcXTxtPath =
+  checkMetaData.value()->funcXTxtPath =
       illvm::FileSystem::linkPath(workPath, "funcx.txt");
 }
 
 static bool
 init(Global &global, illvm::BPtr<IncMetaData> &metaData,
-     std::optional<illvm::BPtr<IncTestMetaData>> &testMetaData,
+     std::optional<illvm::BPtr<IncCheckMetaData>> &checkMetaData,
      const llvm::SmallVector<const char *, 128> &originalArgv) {
   if (!checkArgs(originalArgv)) {
     return false;
   }
 
-  configPaths(metaData, testMetaData);
+  configPaths(metaData, checkMetaData);
 
   return true;
 }
@@ -207,20 +207,20 @@ incCompile(const illvm::BPtr<IncMetaData> &metaData,
 
 static void
 funcv(illvm::BPtr<IncMetaData> &metaData,
-      const std::optional<illvm::BPtr<IncTestMetaData>> &testMetaData) {
+      const std::optional<illvm::BPtr<IncCheckMetaData>> &checkMetaData) {
   const auto startFuncVTS = illvm::Time::currentTsMs();
-  if (testMetaData.has_value()) {
+  if (checkMetaData.has_value()) {
     illvm::FileSystem::cpFile(metaData->outputPath,
-                              testMetaData.value()->partialOPath);
+                              checkMetaData.value()->partialOPath);
   }
   // if (auto err = illvm::funcv::elf::FuncV::run(
   //         metaData->prevOPath, metaData->outputPath, metaData->outputPath,
   //         metaData->funcXSet)) {
   //   ILLVM_UNREACHABLE("TODO");
   // }
-  if (testMetaData.has_value()) {
+  if (checkMetaData.has_value()) {
     illvm::FileSystem::cpFile(metaData->outputPath,
-                              testMetaData.value()->outputOPath);
+                              checkMetaData.value()->outputOPath);
   } else {
     illvm::FileSystem::rmFile(metaData->prevOPath);
   }
@@ -230,11 +230,11 @@ funcv(illvm::BPtr<IncMetaData> &metaData,
 
 static int
 runBase(Global &global, illvm::BPtr<IncMetaData> &metaData,
-        std::optional<illvm::BPtr<IncTestMetaData>> &&testMetaData,
+        std::optional<illvm::BPtr<IncCheckMetaData>> &&checkMetaData,
         const llvm::SmallVector<const char *, 128> &originalArgv,
         const clang::driver::Driver &clangDriver) {
   // Step1. Init.
-  if (!init(global, metaData, testMetaData, originalArgv)) {
+  if (!init(global, metaData, checkMetaData, originalArgv)) {
     // Back to clang.
     global.resetIClangMode();
     return DriverBase::clangCompile(clangDriver, originalArgv);
@@ -262,7 +262,7 @@ runBase(Global &global, illvm::BPtr<IncMetaData> &metaData,
   } else {
     res = incCompile(metaData, clangDriver, originalArgv);
     if (res != 0) {
-      if (testMetaData.has_value()) {
+      if (checkMetaData.has_value()) {
         illvm::FileSystem::rmFile(metaData->prevOPath);
       }
       return DriverBase::recover(global, clangDriver, originalArgv);
@@ -278,7 +278,7 @@ runBase(Global &global, illvm::BPtr<IncMetaData> &metaData,
     illvm::FileSystem::mvFile(metaData->cachePath[PrevDir],
                               metaData->cachePath[CurDir]);
     // Step9. FuncV (iClangFlag && incFlag).
-    funcv(metaData, testMetaData);
+    funcv(metaData, checkMetaData);
   }
 
   // Step10. Fini (iClangFlag).
@@ -296,14 +296,14 @@ int IncDriver::run(Global &global,
   return runBase(global, metaData, std::nullopt, originalArgv, clangDriver);
 }
 
-int IncTestDriver::run(Global &global,
+int IncCheckDriver::run(Global &global,
                        const llvm::SmallVector<const char *, 128> &originalArgv,
                        const clang::driver::Driver &clangDriver) {
-  assert(global.getIClangMode() == IClangMode::IncTestMode);
+  assert(global.getIClangMode() == IClangMode::IncCheckMode);
 
   auto metaData = global.getMetaData<IncMetaData>();
 
-  return runBase(global, metaData, metaData.copyTo<IncTestMetaData>(),
+  return runBase(global, metaData, metaData.copyTo<IncCheckMetaData>(),
                  originalArgv, clangDriver);
 }
 

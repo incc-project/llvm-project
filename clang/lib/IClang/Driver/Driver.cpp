@@ -1,9 +1,9 @@
 #include "iclang/Driver/Driver.h"
 
+#include "iclang/Driver/CheckDriver.h"
 #include "iclang/Driver/DriverBase.h"
 #include "iclang/Driver/IncDriver.h"
 #include "iclang/Driver/ShareDriver.h"
-#include "iclang/Driver/TestDriver.h"
 
 #include "illvm/Support/Diagnostics.h"
 
@@ -26,8 +26,8 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
   if (iClangMode == IClangMode::IncMode) {
     return IncDriver::run(global, originalArgv, clangDriver);
   }
-  if (iClangMode == IClangMode::IncTestMode) {
-    return IncTestDriver::run(global, originalArgv, clangDriver);
+  if (iClangMode == IClangMode::IncCheckMode) {
+    return IncCheckDriver::run(global, originalArgv, clangDriver);
   }
   if (iClangMode == IClangMode::ShareMasterMode) {
     return ShareMasterDriver::run(global, originalArgv, clangDriver);
@@ -35,14 +35,14 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
   if (iClangMode == IClangMode::ShareClientMode) {
     return ShareClientDriver::run(global, originalArgv, clangDriver);
   }
-  if (iClangMode == IClangMode::ShareTestMode) {
-    return ShareTestDriver::run(global, originalArgv, clangDriver);
+  if (iClangMode == IClangMode::ShareCheckMode) {
+    return ShareCheckDriver::run(global, originalArgv, clangDriver);
   }
-  if (iClangMode == IClangMode::TestMode) {
-    return TestDriver::run(global, originalArgv, clangDriver);
+  if (iClangMode == IClangMode::LineMacroCheckMode) {
+    return LineMacroCheckDriver::run(global, originalArgv, clangDriver);
   }
-  if (iClangMode == IClangMode::LineMacroTestMode) {
-    return LineMacroTestDriver::run(global, originalArgv, clangDriver);
+  if (iClangMode == IClangMode::DumpMode) {
+    return DumpDriver::run(global, originalArgv, clangDriver);
   }
   if (iClangMode == IClangMode::ProfileMode) {
     return ProfileDriver::run(global, originalArgv, clangDriver);

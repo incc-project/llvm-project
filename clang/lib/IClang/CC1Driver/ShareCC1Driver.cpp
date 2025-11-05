@@ -14,16 +14,16 @@ void ShareClientCC1Driver::run() {
   ILLVM_FCHECK(false, "We haven't implemented ShareClientCC1Driver yet");
 }
 
-void ShareTestCC1Driver::run() {
+void ShareCheckCC1Driver::run() {
   auto &global = Global::getInstance();
 
-  assert(global.getIClangMode() == IClangMode::ShareTestMode);
+  assert(global.getIClangMode() == IClangMode::ShareCheckMode);
 
   auto &astGlobal = ASTGlobal::getInstance();
   auto &context = astGlobal.getContext();
 
-  auto metaData = global.getMetaData<ShareTestMetaData>();
-  const auto astMetaData = astGlobal.getASTMetaData<ShareTestASTMetaData>();
+  auto metaData = global.getMetaData<ShareCheckMetaData>();
+  const auto astMetaData = astGlobal.getASTMetaData<ShareCheckASTMetaData>();
 
   if (!metaData->enableRefedSymbolAnalysisFlag) {
     return;

@@ -83,7 +83,7 @@ static void recordHeader(illvm::BPtr<IncMetaData> &metaData,
 
 static void
 runBase(illvm::BPtr<IncMetaData> &metaData,
-        const std::optional<illvm::BPtr<const IncTestMetaData>> &testMetaData,
+        const std::optional<illvm::BPtr<const IncCheckMetaData>> &checkMetaData,
         ASTGlobal &astGlobal) {
   auto &sema = astGlobal.getSema();
 
@@ -100,8 +100,8 @@ runBase(illvm::BPtr<IncMetaData> &metaData,
                                                      astGlobal);
     reusableInstAnalysis.run(sema.PendingInstantiations);
 
-    if (testMetaData.has_value()) {
-      illvm::FileSystem::saveSet(testMetaData.value()->funcXTxtPath,
+    if (checkMetaData.has_value()) {
+      illvm::FileSystem::saveSet(checkMetaData.value()->funcXTxtPath,
                                  metaData->funcXSet);
     }
 
@@ -125,16 +125,16 @@ void IncCC1Driver::run() {
   runBase(metaData, std::nullopt, astGlobal);
 }
 
-void IncTestCC1Driver::run() {
+void IncCheckCC1Driver::run() {
   auto &global = Global::getInstance();
 
-  assert(global.getIClangMode() == IClangMode::IncTestMode);
+  assert(global.getIClangMode() == IClangMode::IncCheckMode);
 
   auto &astGlobal = ASTGlobal::getInstance();
 
   auto metaData = global.getMetaData<IncMetaData>();
 
-  runBase(metaData, metaData.constCopyTo<IncTestMetaData>(), astGlobal);
+  runBase(metaData, metaData.constCopyTo<IncCheckMetaData>(), astGlobal);
 }
 
 } // namespace iclang

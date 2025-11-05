@@ -1,8 +1,8 @@
 import lit.formats
 
-config.name = "ILLVMTests"
+config.name = "IClangTests"
 config.test_format = lit.formats.ShTest(True)
-config.suffixes = ['.illvmtest']
+config.suffixes = ['.iclangtest']
 
 config.substitutions.append(('%illvm-test', os.path.join(config.llvm_obj_root, 'bin', 'illvm-test')))
 

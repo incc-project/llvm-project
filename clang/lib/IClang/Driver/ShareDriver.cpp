@@ -22,7 +22,7 @@ int ShareClientDriver::run(
 }
 
 static void
-configTestPaths(illvm::BPtr<ShareTestMetaData> &metaData) {
+configPaths(illvm::BPtr<ShareCheckMetaData> &metaData) {
   const auto preWorkPath = metaData->iClangDirPath[PrevDir];
   const auto workPath = metaData->iClangDirPath[CurDir];
 
@@ -33,7 +33,7 @@ configTestPaths(illvm::BPtr<ShareTestMetaData> &metaData) {
 // outputPath -> iclang.i
 // -emit-obj -> -E
 static int
-clangECompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
+clangECompile(const illvm::BPtr<const ShareCheckMetaData> &metaData,
               const clang::driver::Driver &clangDriver,
               const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, -1, "",
@@ -43,7 +43,7 @@ clangECompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
 
 // inputPath -> iclang.i
 static int
-clangEOCompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
+clangEOCompile(const illvm::BPtr<const ShareCheckMetaData> &metaData,
                const clang::driver::Driver &clangDriver,
                const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, metaData->inputIdx,
@@ -52,7 +52,7 @@ clangEOCompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
 
 // inputPath -> iclangs.i
 static int
-clangESOCompile(const illvm::BPtr<const ShareTestMetaData> &metaData,
+clangESOCompile(const illvm::BPtr<const ShareCheckMetaData> &metaData,
                 const clang::driver::Driver &clangDriver,
                 const llvm::SmallVector<const char *, 128> &originalArgv) {
   return DriverBase::compile(clangDriver, originalArgv, metaData->inputIdx,
@@ -80,16 +80,16 @@ static int getLoc(const std::string &filepath) {
   return res;
 }
 
-int ShareTestDriver::run(
+int ShareCheckDriver::run(
     Global &global,
     const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {
 
-  assert(global.getIClangMode() == IClangMode::ShareTestMode);
+  assert(global.getIClangMode() == IClangMode::ShareCheckMode);
 
-  auto metaData = global.getMetaData<ShareTestMetaData>();
+  auto metaData = global.getMetaData<ShareCheckMetaData>();
 
-  configTestPaths(metaData);
+  configPaths(metaData);
 
   // clang++ -E -o iclang.i inputPath.
   //   Failed: set recover flag, backup to clang.

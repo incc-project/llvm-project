@@ -23,7 +23,7 @@ public:
   static void run();
 };
 
-class IncTestCC1Driver {
+class IncCheckCC1Driver {
 public:
   static void run();
 };

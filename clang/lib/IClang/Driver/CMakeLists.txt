@@ -7,11 +7,11 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangIClangDriver
+  CheckDriver.cpp
   Driver.cpp
   DriverBase.cpp
   IncDriver.cpp
   ShareDriver.cpp
-  TestDriver.cpp
 
   DEPENDS
   ClangDriverOptions

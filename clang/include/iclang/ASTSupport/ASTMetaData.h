@@ -27,7 +27,7 @@ class IncASTMetaData final : public ASTMetaData {
 public:
 };
 
-class IncTestASTMetaData final : public ASTMetaData {
+class IncCheckASTMetaData final : public ASTMetaData {
 public:
 };
 
@@ -39,21 +39,24 @@ class ShareClientASTMetaData final : public ASTMetaData {
 public:
 };
 
-class ShareTestASTMetaData final : public ASTMetaData {
+class ShareCheckASTMetaData final : public ASTMetaData {
 public:
   std::unordered_set<const clang::FunctionDecl *> emitGlobalFuncDefs = {};
 
   void addEmitGlobalFuncDef(const clang::FunctionDecl *funcDecl);
 };
 
-class TestASTMetaData final : public ASTMetaData {
+class LineMacroCheckASTMetaData final : public ASTMetaData {
 public:
 };
 
-class LineMacroTestASTMetaData final : public ASTMetaData {
+class DumpASTMetaData final : public ASTMetaData {
 public:
 };
 
+class ProfileASTMetaData final : public ASTMetaData {
+public:
+};
 
 } // namespace iclang
 

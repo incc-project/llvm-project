@@ -10,10 +10,12 @@
 //
 // iClangMode:
 // * "Inc": function-level incremental compilation.
-// * "IncTest": inc test mode for IClang developers.
+// * "IncCheck": inc check mode for IClang developers.
 // * "ShareMaster": master mode of shared compilation optimization.
 // * "ShareClient": client mode of shared compilation optimization.
-// * "ShareTest": share test mode for IClang developers.
+// * "ShareCheck": share check mode for IClang developers.
+// * "LineMacroCheck": Check line macro.
+// * "Dump": AST dump mode.
 // * "Profile": profile Clang.
 // * "Clang": default, equivalent to Clang.
 //
@@ -34,12 +36,12 @@ namespace iclang {
 
 enum class IClangMode {
   IncMode,
-  IncTestMode,
+  IncCheckMode,
   ShareMasterMode,
   ShareClientMode,
-  ShareTestMode,
-  TestMode,
-  LineMacroTestMode,
+  ShareCheckMode,
+  DumpMode,
+  LineMacroCheckMode,
   ProfileMode,
   ClangMode
 };
@@ -67,7 +69,7 @@ public:
   IClangMode getIClangMode() const { return iClangMode; }
 
   bool isIClangMode(const IClangMode _iClangMode) const {
-    if (iClangMode == IClangMode::IncTestMode &&
+    if (iClangMode == IClangMode::IncCheckMode &&
         _iClangMode == IClangMode::IncMode) {
       return true;
     }
@@ -82,18 +84,20 @@ public:
     illvm::OPtr<MetaData> metaData;
     if (iClangMode == IClangMode::IncMode) {
       metaData = illvm::make_owner<IncMetaData>().moveTo<MetaData>();
-    } else if (iClangMode == IClangMode::IncTestMode) {
-      metaData = illvm::make_owner<IncTestMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::IncCheckMode) {
+      metaData = illvm::make_owner<IncCheckMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareMasterMode) {
       metaData = illvm::make_owner<ShareMasterMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareClientMode) {
       metaData = illvm::make_owner<ShareClientMetaData>().moveTo<MetaData>();
-    } else if (iClangMode == IClangMode::ShareTestMode) {
-      metaData = illvm::make_owner<ShareTestMetaData>().moveTo<MetaData>();
-    } else if (iClangMode == IClangMode::TestMode) {
-      metaData = illvm::make_owner<TestMetaData>().moveTo<MetaData>();
-    } else if (iClangMode == IClangMode::LineMacroTestMode) {
-      metaData = illvm::make_owner<LineMacroTestMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::ShareCheckMode) {
+      metaData = illvm::make_owner<ShareCheckMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::LineMacroCheckMode) {
+      metaData = illvm::make_owner<LineMacroCheckMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::DumpMode) {
+      metaData = illvm::make_owner<DumpMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::ProfileMode) {
+      metaData = illvm::make_owner<ProfileMetaData>().moveTo<MetaData>();
     } else {
       metaData = illvm::make_owner<MetaData>();
     }
@@ -108,18 +112,18 @@ public:
   void init(const std::string &iClangModeStr) {
     if (iClangModeStr == "Inc") {
       iClangMode = IClangMode::IncMode;
-    } else if (iClangModeStr == "IncTest") {
-      iClangMode = IClangMode::IncTestMode;
+    } else if (iClangModeStr == "IncCheck") {
+      iClangMode = IClangMode::IncCheckMode;
     } else if (iClangModeStr == "ShareMaster") {
       iClangMode = IClangMode::ShareMasterMode;
     } else if (iClangModeStr == "ShareClient") {
       iClangMode = IClangMode::ShareClientMode;
     } else if (iClangModeStr == "ShareTest") {
-      iClangMode = IClangMode::ShareTestMode;
-    } else if (iClangModeStr == "Test") {
-      iClangMode = IClangMode::TestMode;
-    } else if (iClangModeStr == "LineMacroTest") {
-      iClangMode = IClangMode::LineMacroTestMode;
+      iClangMode = IClangMode::ShareCheckMode;
+    } else if (iClangModeStr == "LineMacroCheck") {
+      iClangMode = IClangMode::LineMacroCheckMode;
+    } else if (iClangModeStr == "Dump") {
+      iClangMode = IClangMode::DumpMode;
     } else if (iClangModeStr == "Profile") {
       iClangMode = IClangMode::ProfileMode;
     } else if (iClangModeStr == "Clang" || iClangModeStr.empty()) {

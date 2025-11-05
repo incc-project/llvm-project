@@ -249,4 +249,12 @@ int DriverBase::recover(
   return res;
 }
 
+int DriverBase::runBase(Global &global,
+                   const llvm::SmallVector<const char *, 128> &originalArgv,
+                   const clang::driver::Driver &clangDriver) {
+  const int res = clangCompile(clangDriver, originalArgv);
+  fini(global);
+  return res;
+}
+
 } // namespace iclang

@@ -167,7 +167,7 @@ public:
   void deserialize(llvm::json::Object &root) override;
 };
 
-class IncTestMetaData final : public IncMetaData {
+class IncCheckMetaData final : public IncMetaData {
 public:
   // iclang.cpp.
   std::string cacheSrcPath = "";
@@ -190,7 +190,7 @@ class ShareClientMetaData final : public MetaData {
 public:
 };
 
-class ShareTestMetaData final : public MetaData {
+class ShareCheckMetaData final : public MetaData {
 public:
   // iclang.i.
   std::string ppPath = "";
@@ -212,9 +212,9 @@ public:
 
   std::vector<illvm::Interval> unRefedDeclIntervals = {};
 
-  ShareTestMetaData() = default;
+  ShareCheckMetaData() = default;
 
-  ~ShareTestMetaData() override = default;
+  ~ShareCheckMetaData() override = default;
 
   // Format:
   // MetaData
@@ -228,11 +228,7 @@ public:
   void deserialize(llvm::json::Object &root) override;
 };
 
-class TestMetaData final : public MetaData {
-public:
-};
-
-class LineMacroTestMetaData final : public MetaData {
+class LineMacroCheckMetaData final : public MetaData {
 public:
   unsigned totalFuncNum = 0;
   unsigned funcWithLineMacroNum = 0;
@@ -244,6 +240,14 @@ public:
   llvm::json::Object serialize() const override;
 
   void deserialize(llvm::json::Object &root) override;
+};
+
+class DumpMetaData final : public MetaData {
+public:
+};
+
+class ProfileMetaData final : public MetaData {
+public:
 };
 
 } // namespace iclang

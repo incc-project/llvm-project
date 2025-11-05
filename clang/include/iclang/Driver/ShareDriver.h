@@ -33,7 +33,7 @@ public:
                  const clang::driver::Driver &clangDriver);
 };
 
-class ShareTestDriver {
+class ShareCheckDriver {
 public:
   static int run(Global &global,
                  const llvm::SmallVector<const char *, 128> &originalArgv,

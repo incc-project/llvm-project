@@ -64,6 +64,10 @@ public:
 
   static int recover(Global &global, const clang::driver::Driver &clangDriver,
                      const llvm::SmallVector<const char *, 128> &originalArgv);
+
+  static int runBase(Global &global,
+                     const llvm::SmallVector<const char *, 128> &originalArgv,
+                     const clang::driver::Driver &clangDriver);
 };
 
 } // namespace iclang
