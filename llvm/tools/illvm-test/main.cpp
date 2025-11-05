@@ -6,6 +6,8 @@
 #include <sstream>
 #include <vector>
 
+#include "llvm/Support/JSON.h"
+
 #include "illvm/FuncV/ELF/FuncV.h"
 #include "illvm/Support/Diagnostics.h"
 #include "illvm/Support/FileSystem.h"
@@ -127,13 +129,13 @@ protected:
     return oss.str();
   }
 
-  virtual void runImpl(const std::vector<std::string> &argValues) const = 0;
+  virtual int runImpl(const std::vector<std::string> &argValues) const = 0;
 
 public:
-  void run(std::queue<std::string> &argQ) const {
+  int run(std::queue<std::string> &argQ) const {
     if (!argQ.empty() && argQ.front() == "help") {
       std::cout << usage();
-      exit(0);
+      return 0;
     }
     std::vector<std::string> argValues;
     argValues.reserve(argNames.size());
@@ -141,12 +143,12 @@ public:
       if (argQ.empty()) {
         std::cerr << "Error: Missing argument " << argName << std::endl;
         std::cerr << usage();
-        exit(1);
+        return 1;
       }
       argValues.emplace_back(argQ.front());
       argQ.pop();
     }
-    runImpl(argValues);
+    return runImpl(argValues);
   }
 };
 
@@ -163,9 +165,10 @@ public:
 
 class HelloTask : public ExecutingTask {
 private:
-  void runImpl(const std::vector<std::string> &argValues) const override {
+  int runImpl(const std::vector<std::string> &argValues) const override {
     const std::string helloContent = argValues[0];
     std::cout << "Hello " << helloContent << std::endl;
+    return 0;
   }
 
   explicit HelloTask(ILLVMTestTask *iLLVMTestTask)
@@ -176,6 +179,77 @@ private:
 public:
   __attribute__((constructor)) static HelloTask *getInstance() {
     static HelloTask instance(ILLVMTestTask::getInstance());
+    return &instance;
+  }
+};
+
+class JsonCheckTask : public ExecutingTask {
+private:
+  int runImpl(const std::vector<std::string> &argValues) const override {
+    const std::string inputJsonFile = argValues[0];
+    const std::string key = argValues[1];
+    const std::string value = argValues[2];
+    const std::string valueType = argValues[3];
+
+    const auto jsonData = illvm::FileSystem::readAll(inputJsonFile);
+    auto valueOrErr = llvm::json::parse(jsonData);
+    ILLVM_FATAL_ON(valueOrErr.takeError(),
+                   "Can not parse meta data: " + inputJsonFile);
+    auto *rootPtr = valueOrErr->getAsObject();
+    ILLVM_FCHECK(rootPtr != nullptr,
+                 "Can not load object from meta data: " + inputJsonFile);
+
+    auto root = std::move(*rootPtr);
+
+    auto it = root.find(key);
+    if (it == root.end()) {
+      std::cerr << "Key does not exist: " << key << std::endl;
+      return 1;
+    }
+
+    std::string originValue;
+    if (valueType == "int") {
+      const auto valueOpt = it->second.getAsInteger();
+      if (!valueOpt.has_value()) {
+        std::cerr << "Cannot get int value of key: " << key << std::endl;
+        return 1;
+      }
+      originValue = std::to_string(valueOpt.value());
+    } else if (valueType == "string") {
+      const auto valueOpt = it->second.getAsString();
+      if (!valueOpt.has_value()) {
+        std::cerr << "Cannot get string value of key: " << key << std::endl;
+        return 1;
+      }
+      originValue = valueOpt.value();
+    } else {
+      std::cerr << "Unknown type: " << valueType << std::endl;
+      return 1;
+    }
+
+    if (originValue != value) {
+      std::cerr << "Value does not match: " << originValue << " != " << value
+                << std::endl;
+      return 1;
+    }
+
+    return 0;
+  }
+
+  explicit JsonCheckTask(ILLVMTestTask *iLLVMTestTask)
+      : ExecutingTask("jsonCheck",
+                      "Check if the inputJsonFile has <key, value>, type "
+                      "support [int, string]",
+                      iLLVMTestTask) {
+    argNames.emplace_back("inputJsonFile");
+    argNames.emplace_back("key");
+    argNames.emplace_back("value");
+    argNames.emplace_back("type");
+  }
+
+public:
+  __attribute__((constructor)) static JsonCheckTask *getInstance() {
+    static JsonCheckTask instance(ILLVMTestTask::getInstance());
     return &instance;
   }
 };
@@ -206,7 +280,7 @@ public:
 
 class FuncVELFDumpTask : public ExecutingTask {
 private:
-  void runImpl(const std::vector<std::string> &argValues) const override {
+  int runImpl(const std::vector<std::string> &argValues) const override {
     const std::string elfFilePath = argValues[0];
     auto objFileOrErr = illvm::funcv::elf::FuncV::loadObjFile(elfFilePath);
     ILLVM_FATAL_ON(objFileOrErr.takeError(), "");
@@ -214,6 +288,7 @@ private:
 
     objFile.layout();
     std::cout << objFile.toString() << std::endl;
+    return 0;
   }
 
   explicit FuncVELFDumpTask(FuncVELFTask *funcVELFTask)
@@ -230,7 +305,7 @@ public:
 
 class FuncVELFReuseTask : public ExecutingTask {
 private:
-  void runImpl(const std::vector<std::string> &argValues) const override {
+  int runImpl(const std::vector<std::string> &argValues) const override {
     const std::string oldObjPath = argValues[0];
     const std::string newObjPath = argValues[1];
     const std::string outputPath = argValues[2];
@@ -243,6 +318,8 @@ private:
     ILLVM_FATAL_ON(illvm::funcv::elf::FuncV::run(oldObjPath, newObjPath,
                                                  outputPath, funcXSet),
                    "");
+
+    return 0;
   }
 
   explicit FuncVELFReuseTask(FuncVELFTask *funcVELFTask)
@@ -272,6 +349,5 @@ int main(const int argc, char **argv) {
     task = forwardingTask->trans(argQ);
   }
   const auto *executingTask = static_cast<const ExecutingTask *>(task);
-  executingTask->run(argQ);
-  return 0;
+  return executingTask->run(argQ);
 }
