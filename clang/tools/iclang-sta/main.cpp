@@ -253,7 +253,7 @@ private:
 
       totalFuncNum += _totalFuncNum;
       funcWithLineMacroNum += _funcWithLineMacroNum;
-      if (funcWithLineMacroNum != 0) {
+      if (_funcWithLineMacroNum != 0) {
         fileWithLineMacroNum += 1;
       }
     }
