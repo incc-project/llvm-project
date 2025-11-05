@@ -11,6 +11,10 @@ namespace iclang {
 
 static std::string
 parseIClangArg(const llvm::SmallVector<const char *, 128> &originalArgv) {
+  const char *iClangEnvStr = getenv("ICLANG");
+  if (iClangEnvStr != nullptr) {
+    return iClangEnvStr;
+  }
   std::string iClangArg;
   for (size_t i = 0; i < originalArgv.size(); i++) {
     const std::string arg = originalArgv[i];
