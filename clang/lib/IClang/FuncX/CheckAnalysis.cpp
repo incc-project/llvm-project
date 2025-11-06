@@ -41,7 +41,7 @@ bool LineMacroCheckAnalysis::TraverseStmt(clang::Stmt *stmt,
   }
   if (const auto *callExpr = llvm::dyn_cast<clang::CallExpr>(stmt)) {
     const auto *funcDecl = callExpr->getDirectCallee();
-    if (funcDecl != nullptr && funcDecl->getNameAsString() == "__assert_fail") {
+    if (funcDecl != nullptr) {
       return true;
     }
   } else if (const auto *sourceLocExpr =
@@ -58,6 +58,8 @@ bool LineMacroCheckAnalysis::TraverseStmt(clang::Stmt *stmt,
         clang::Lexer::getImmediateMacroName(loc, sm, langOpts).str();
       if (macroName == "__LINE__") {
         funcsWithLineMacro.insert(curFuncDecl);
+        // llvm::errs() << curFuncDecl->getNameAsString() << "\n";
+        // curFuncDecl->getSourceRange().dump(sm);
       }
     }
   }

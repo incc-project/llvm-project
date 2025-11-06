@@ -254,6 +254,7 @@ private:
       totalFuncNum += _totalFuncNum;
       funcWithLineMacroNum += _funcWithLineMacroNum;
       if (_funcWithLineMacroNum != 0) {
+        std::cout << "Find line macro in " << compileJsonPath << std::endl;
         fileWithLineMacroNum += 1;
       }
     }
