@@ -60,6 +60,9 @@ bool LineMacroCheckAnalysis::TraverseStmt(clang::Stmt *stmt,
         funcsWithLineMacro.insert(curFuncDecl);
         // llvm::errs() << curFuncDecl->getNameAsString() << "\n";
         // curFuncDecl->getSourceRange().dump(sm);
+        // loc.dump(sm);
+        // stmt->dump();
+        // llvm::errs() << (void*)stmt << "\n";
       }
     }
   }

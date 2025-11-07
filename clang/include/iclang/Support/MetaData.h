@@ -76,6 +76,16 @@ public:
 
   long long endTs = 0;
 
+  // We will intercept Preprocessor::enterSourceFile() and
+  // modify the source file buffer
+  // without modifying the source file itself.
+  std::string hackedMainBuffer = "";
+
+  llvm::StringRef hackedMainBufferRef = "";
+
+  static std::string hackMainBuffer(const std::string &originalBuffer,
+                                  const std::vector<std::string> &tir);
+
   MetaData() = default;
 
   virtual ~MetaData() = default;
@@ -144,16 +154,6 @@ public:
 
   // Enable hackedMainBuffer.
   bool skipTopIncludeRegionFlag = false;
-
-  // We will intercept Preprocessor::enterSourceFile() and
-  // modify the source file buffer
-  // without modifying the source file itself.
-  std::string hackedMainBuffer = "";
-
-  llvm::StringRef hackedMainBufferRef = "";
-
-  static std::string hackMainBuffer(const std::string &originalBuffer,
-                                  const std::vector<std::string> &tir);
 
   // MetaData
   // incFlag

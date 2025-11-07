@@ -116,7 +116,68 @@ void clang::ParseAST(Preprocessor &PP, ASTConsumer *Consumer,
   ParseAST(*S, PrintStats, SkipFunctionBodies);
 }
 
+static void injectIClangLineTable(Sema &S) {
+  ASTContext &Ctx = S.getASTContext();
+  TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
+
+  // Func name: _iclang_line_table_interceptor.
+  IdentifierInfo &II = Ctx.Idents.get("_iclang_line_table_interceptor");
+  DeclarationName Name(&II);
+
+  // Return type: int.
+  QualType RetTy = Ctx.IntTy;
+  // Param type: int.
+  QualType ParamTy = Ctx.IntTy;
+
+  // Function Type: int(int).
+  FunctionProtoType::ExtProtoInfo EPI;
+  QualType FnTy = Ctx.getFunctionType(RetTy, {ParamTy}, EPI);
+
+  // FunctionDecl: static int _iclang_line_table_interceptor(int);
+  auto *FD = FunctionDecl::Create(Ctx, TU, SourceLocation(), SourceLocation(),
+                                  Name, FnTy, nullptr, SC_Static);
+  FD->setImplicit(true);
+
+  // Parameter: (int line).
+  IdentifierInfo &PII = Ctx.Idents.get("line");
+  auto *Param = ParmVarDecl::Create(Ctx, FD, SourceLocation(), SourceLocation(),
+                                    &PII, ParamTy, nullptr, SC_None, nullptr);
+  FD->setParams({Param});
+
+  // DeclRefExpr in ReturnStmt: line.
+  auto *DRE =
+      DeclRefExpr::Create(Ctx, NestedNameSpecifierLoc(), SourceLocation(),
+                          Param, false, SourceLocation(), ParamTy, VK_LValue);
+
+  // Function body: { return line; }.
+  auto *Ret = ReturnStmt::Create(Ctx, SourceLocation(), DRE, nullptr);
+  auto *Body =
+      CompoundStmt::Create(Ctx, {Ret}, {}, SourceLocation(), SourceLocation());
+  FD->setBody(Body);
+
+  // __attribute__((optnone, noinline, used)).
+  FD->addAttr(NoInlineAttr::CreateImplicit(Ctx));
+  FD->addAttr(OptimizeNoneAttr::CreateImplicit(Ctx));
+  FD->addAttr(UsedAttr::CreateImplicit(Ctx));
+
+  // Add to AST.
+  TU->addDecl(FD);
+
+  // Codegen.
+  DeclGroupRef DGR(FD);
+  S.getASTConsumer().HandleTopLevelDecl(DGR);
+}
+
 void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
+  // IClang begin
+  const auto &global = iclang::Global::getInstance();
+  auto &astGlobal = iclang::ASTGlobal::getInstance();
+  astGlobal.init(global, &S);
+  if (global.isIClangMode(iclang::IClangMode::LineMacroCheckMode)) {
+    injectIClangLineTable(S);
+  }
+  // IClang end
+
   // Collect global stats on Decls/Stmts (until we have a module streamer).
   if (PrintStats) {
     Decl::EnableStatistics();
@@ -149,12 +210,6 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   ExternalASTSource *External = S.getASTContext().getExternalSource();
   if (External)
     External->StartTranslationUnit(Consumer);
-
-  // IClang begin
-  const auto &global = iclang::Global::getInstance();
-  auto &astGlobal = iclang::ASTGlobal::getInstance();
-  astGlobal.init(global, &S);
-  // IClang end
 
   // If a PCH through header is specified that does not have an include in
   // the source, or a PCH is being created with #pragma hdrstop with nothing

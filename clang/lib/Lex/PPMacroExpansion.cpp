@@ -1624,8 +1624,12 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     PresumedLoc PLoc = SourceMgr.getPresumedLoc(Loc);
 
     // __LINE__ expands to a simple numeric value.
+    // IClang begin
+    // OS << 123;
+    // Tok.setKind(tok::numeric_constant);
     OS << (PLoc.isValid()? PLoc.getLine() : 1);
     Tok.setKind(tok::numeric_constant);
+    // IClang end
   } else if (II == Ident__FILE__ || II == Ident__BASE_FILE__ ||
              II == Ident__FILE_NAME__) {
     // C99 6.10.8: "__FILE__: The presumed name of the current source file (a

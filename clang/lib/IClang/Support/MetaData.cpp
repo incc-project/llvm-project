@@ -7,7 +7,7 @@
 
 namespace iclang {
 
-std::string IncMetaData::hackMainBuffer(const std::string &originalBuffer,
+std::string MetaData::hackMainBuffer(const std::string &originalBuffer,
                                   const std::vector<std::string> &tir) {
   std::istringstream iss(originalBuffer);
   std::string line;
