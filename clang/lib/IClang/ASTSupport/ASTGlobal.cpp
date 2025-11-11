@@ -14,6 +14,9 @@ void ASTGlobal::init(const Global &global, clang::Sema *_sema) {
     astMetaData = illvm::make_owner<IncASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::IncCheckMode) {
     astMetaData = illvm::make_owner<IncCheckASTMetaData>().moveTo<ASTMetaData>();
+  } else if (iClangMode == IClangMode::IncLineCheckMode) {
+    astMetaData =
+        illvm::make_owner<IncLineCheckASTMetaData>().moveTo<ASTMetaData>();
   } else if (iClangMode == IClangMode::ShareMasterMode) {
     astMetaData =
         illvm::make_owner<ShareMasterASTMetaData>().moveTo<ASTMetaData>();

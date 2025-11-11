@@ -16,6 +16,7 @@
 #include <unordered_set>
 
 #include "clang/AST/Decl.h"
+#include "clang/Sema/Sema.h"
 
 namespace iclang {
 
@@ -29,6 +30,13 @@ public:
 
 class IncCheckASTMetaData final : public ASTMetaData {
 public:
+};
+
+class IncLineCheckASTMetaData final : public ASTMetaData {
+public:
+  static void injectIClangLineWMacro(clang::Sema &sema);
+
+  static void injectIClangLineFunc(clang::Sema &sema);
 };
 
 class ShareMasterASTMetaData final : public ASTMetaData {

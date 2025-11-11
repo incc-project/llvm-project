@@ -172,6 +172,9 @@ class Preprocessor {
 
   /// Identifiers for builtin macros and other builtins.
   IdentifierInfo *Ident__LINE__, *Ident__FILE__;   // __LINE__, __FILE__
+  // IClang begin.
+  IdentifierInfo *Ident__ICLANGLINE__;             // __ICLANGLINE__
+  // IClang end.
   IdentifierInfo *Ident__DATE__, *Ident__TIME__;   // __DATE__, __TIME__
   IdentifierInfo *Ident__INCLUDE_LEVEL__;          // __INCLUDE_LEVEL__
   IdentifierInfo *Ident__BASE_FILE__;              // __BASE_FILE__

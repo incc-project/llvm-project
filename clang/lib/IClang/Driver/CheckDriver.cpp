@@ -2,6 +2,13 @@
 
 namespace iclang {
 
+int IncLineCheckDriver::run(
+    Global &global, const llvm::SmallVector<const char *, 128> &originalArgv,
+    const clang::driver::Driver &clangDriver) {
+  assert(global.getIClangMode() == IClangMode::IncLineCheckMode);
+  return DriverBase::runBase(global, originalArgv, clangDriver);
+}
+
 int LineMacroCheckDriver::run(
     Global &global, const llvm::SmallVector<const char *, 128> &originalArgv,
     const clang::driver::Driver &clangDriver) {

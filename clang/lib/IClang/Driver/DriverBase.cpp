@@ -11,22 +11,23 @@ namespace iclang {
 
 static std::string
 parseIClangArg(const llvm::SmallVector<const char *, 128> &originalArgv) {
+  std::string iClangArg;
   const char *iClangEnvStr = getenv("ICLANG");
   if (iClangEnvStr != nullptr) {
-    return iClangEnvStr;
-  }
-  std::string iClangArg;
-  for (size_t i = 0; i < originalArgv.size(); i++) {
-    const std::string arg = originalArgv[i];
-    if (illvm::Strings::hasPrefix(arg, "-iclang=")) {
-      iClangArg = arg.substr(8);
+    iClangArg = iClangEnvStr;
+  } else {
+    for (size_t i = 0; i < originalArgv.size(); i++) {
+      const std::string arg = originalArgv[i];
+      if (illvm::Strings::hasPrefix(arg, "-iclang=")) {
+        iClangArg = arg.substr(8);
+      }
     }
   }
   if (iClangArg.size() > 2) {
     const char beginC = iClangArg[0];
     const char endC = iClangArg[iClangArg.size() - 1];
     if ((beginC == '"' && endC == '"') || (beginC == '\'' && endC == '\'')) {
-      iClangArg = iClangArg.substr(1, iClangArg.size() - 1);
+      iClangArg = iClangArg.substr(1, iClangArg.size() - 2);
     }
   }
   return iClangArg;

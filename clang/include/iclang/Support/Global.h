@@ -37,6 +37,7 @@ namespace iclang {
 enum class IClangMode {
   IncMode,
   IncCheckMode,
+  IncLineCheckMode,
   ShareMasterMode,
   ShareClientMode,
   ShareCheckMode,
@@ -86,6 +87,8 @@ public:
       metaData = illvm::make_owner<IncMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::IncCheckMode) {
       metaData = illvm::make_owner<IncCheckMetaData>().moveTo<MetaData>();
+    } else if (iClangMode == IClangMode::IncLineCheckMode) {
+      metaData = illvm::make_owner<IncLineCheckMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareMasterMode) {
       metaData = illvm::make_owner<ShareMasterMetaData>().moveTo<MetaData>();
     } else if (iClangMode == IClangMode::ShareClientMode) {
@@ -114,6 +117,8 @@ public:
       iClangMode = IClangMode::IncMode;
     } else if (iClangModeStr == "IncCheck") {
       iClangMode = IClangMode::IncCheckMode;
+    } else if (iClangModeStr == "IncLineCheck") {
+      iClangMode = IClangMode::IncLineCheckMode;
     } else if (iClangModeStr == "ShareMaster") {
       iClangMode = IClangMode::ShareMasterMode;
     } else if (iClangModeStr == "ShareClient") {

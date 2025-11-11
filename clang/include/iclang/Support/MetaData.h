@@ -182,6 +182,11 @@ public:
   std::string funcXTxtPath = "";
 };
 
+class IncLineCheckMetaData : public MetaData {
+public:
+  const char *iClangLineWrapper = "__ICLW__";
+};
+
 class ShareMasterMetaData final : public MetaData {
 public:
 };

@@ -29,6 +29,9 @@ int Driver::run(const clang::driver::Action::ActionClass &kind,
   if (iClangMode == IClangMode::IncCheckMode) {
     return IncCheckDriver::run(global, originalArgv, clangDriver);
   }
+  if (iClangMode == IClangMode::IncLineCheckMode) {
+    return IncLineCheckDriver::run(global, originalArgv, clangDriver);
+  }
   if (iClangMode == IClangMode::ShareMasterMode) {
     return ShareMasterDriver::run(global, originalArgv, clangDriver);
   }
