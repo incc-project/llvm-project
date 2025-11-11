@@ -87,12 +87,12 @@ void IncLineCheckASTMetaData::injectIClangLineFunc(clang::Sema &sema) {
   const IdentifierInfo &ii = ctx.Idents.get("__iclang_line");
   const DeclarationName name(&ii);
 
-  // Return type: int.
-  const QualType retTy = ctx.IntTy;
-  // Param type: int.
-  const QualType paramTy = ctx.IntTy;
+  // Return type: unsigned int.
+  const QualType retTy = ctx.UnsignedIntTy;
+  // Param type: unsigned int.
+  const QualType paramTy = ctx.UnsignedIntTy;
 
-  // Function Type: int(int).
+  // Function Type: unsigned int(unsigned int).
   const FunctionProtoType::ExtProtoInfo epi;
   const QualType fnTy = ctx.getFunctionType(retTy, {paramTy}, epi);
 
@@ -101,7 +101,7 @@ void IncLineCheckASTMetaData::injectIClangLineFunc(clang::Sema &sema) {
                                   name, fnTy, nullptr, SC_Static);
   fd->setImplicit(true);
 
-  // Parameter: (int line).
+  // Parameter: (unsigned int line).
   const IdentifierInfo &pii = ctx.Idents.get("line");
   auto *param = ParmVarDecl::Create(ctx, fd, SourceLocation(), SourceLocation(),
                                     &pii, paramTy, nullptr, SC_None, nullptr);
