@@ -185,6 +185,13 @@ public:
 class IncLineCheckMetaData : public MetaData {
 public:
   const char *iClangLineWrapper = "__ICLW__";
+  bool hashHashFlag = false;
+
+  // MetaData
+  // hashHashFlag
+  llvm::json::Object serialize() const override;
+
+  void deserialize(llvm::json::Object &root) override;
 };
 
 class ShareMasterMetaData final : public MetaData {

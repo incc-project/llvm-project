@@ -118,6 +118,20 @@ void IncMetaData::deserialize(llvm::json::Object &root) {
   }
 }
 
+llvm::json::Object IncLineCheckMetaData::serialize() const {
+  auto root = MetaData::serialize();
+
+  root["hashHashFlag"] = hashHashFlag;
+
+  return root;
+}
+
+void IncLineCheckMetaData::deserialize(llvm::json::Object &root) {
+  MetaData::deserialize(root);
+
+  hashHashFlag = root["hashHashFlag"].getAsBoolean().value();
+}
+
 llvm::json::Object ShareCheckMetaData::serialize() const {
   auto root = MetaData::serialize();
 
