@@ -23,7 +23,7 @@ parseIClangArg(const llvm::SmallVector<const char *, 128> &originalArgv) {
       }
     }
   }
-  if (iClangArg.size() > 2) {
+  if (iClangArg.size() >= 2) {
     const char beginC = iClangArg[0];
     const char endC = iClangArg[iClangArg.size() - 1];
     if ((beginC == '"' && endC == '"') || (beginC == '\'' && endC == '\'')) {
