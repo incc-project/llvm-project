@@ -2001,10 +2001,21 @@ bool Lexer::LexIdentifierContinue(Token &Result, const char *CurPtr) {
     return strncmp(src, dest, destLen) == 0;
   };
 
-  auto skipWhiteChar = [](const char *&src, const char *const srcEnd) {
+  auto isValidBuiltinLine = [](const char *src, const char *const srcEnd) -> const char* {
     while (src < srcEnd && std::isspace(*src)) {
       src++;
     }
+    if (src >= srcEnd || *src != '(') {
+      return nullptr;
+    }
+    src++;
+    while (src < srcEnd && std::isspace(*src)) {
+      src++;
+    }
+    if (src >= srcEnd || *src != ')') {
+      return nullptr;
+    }
+    return src + 1;
   };
 
   auto &global = iclang::Global::getInstance();
@@ -2014,15 +2025,13 @@ bool Lexer::LexIdentifierContinue(Token &Result, const char *CurPtr) {
       Result.setLength(strlen(metaData->iClangLineWrapper));
       Result.setRawIdentifierData(metaData->iClangLineWrapper);
     } else if (iClangStrNCmp(IdStart, BufferEnd, "__builtin_LINE")) {
-      Result.setLength(strlen(metaData->iClangLineWrapper));
-      Result.setRawIdentifierData(metaData->iClangLineWrapper);
-      skipWhiteChar(CurPtr, BufferEnd);
-      ILLVM_FCHECK(*CurPtr == '(' && CurPtr + 1 < BufferEnd, "");
-      CurPtr++;
-      skipWhiteChar(CurPtr, BufferEnd);
-      ILLVM_FCHECK(*CurPtr == ')' && CurPtr + 1 < BufferEnd, "");
-      CurPtr++;
-      BufferPtr = CurPtr;
+      const auto endPos = isValidBuiltinLine(CurPtr, BufferEnd);
+      if (endPos != nullptr) {
+        Result.setLength(strlen(metaData->iClangLineWrapper));
+        Result.setRawIdentifierData(metaData->iClangLineWrapper);
+        CurPtr = endPos;
+        BufferPtr = CurPtr;
+      }
     }
   }
   // IClang end.
