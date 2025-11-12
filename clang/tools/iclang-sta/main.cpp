@@ -185,6 +185,83 @@ public:
   }
 };
 
+class IncLineStaTask : public ExecutingTask {
+private:
+  int runImpl(const std::vector<std::string> &argValues) const override {
+    const std::string projectPath = argValues[0];
+
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+
+    std::vector<std::string> compileJsonPaths;
+
+    fs::recursive_directory_iterator it(projectPath, ec), end;
+    if (ec) {
+      std::cerr << "Error accessing root: " << ec.message() << "\n";
+      return 1;
+    }
+
+    while (it != end) {
+      const fs::directory_entry &entry = *it;
+
+      if (entry.is_regular_file(ec)) {
+        const fs::path &p = entry.path();
+        if (p.filename() == "compile.json" &&
+            p.parent_path().extension() == ".iclang") {
+          compileJsonPaths.push_back(p.string());
+        }
+      }
+
+      it.increment(ec);
+      if (ec) {
+        std::cerr << "Error during iteration: " << ec.message() << "\n";
+        return 1;
+      }
+    }
+
+    const uint64_t totalFileNum = compileJsonPaths.size();
+    uint64_t hashHashFileNum = 0;
+
+    for (const auto &compileJsonPath : compileJsonPaths) {
+      const auto jsonData = illvm::FileSystem::readAll(compileJsonPath);
+      auto valueOrErr = llvm::json::parse(jsonData);
+      ILLVM_FATAL_ON(valueOrErr.takeError(),
+                     "Can not parse meta data: " + compileJsonPath);
+      auto *rootPtr = valueOrErr->getAsObject();
+      ILLVM_FCHECK(rootPtr != nullptr,
+                   "Can not load object from meta data: " + compileJsonPath);
+
+      auto root = std::move(*rootPtr);
+
+      if (root.find("hashHashFlag") == root.end()) {
+        std::cerr << "Cannot load hashHashFlag from " << compileJsonPath
+                  << std::endl;
+        return 1;
+      }
+
+      const bool hashHashFlag = root["hashHashFlag"].getAsBoolean().value();
+      hashHashFileNum += hashHashFlag;
+    }
+
+    std::cout << "[totalFileNum] " << totalFileNum << std::endl;
+    std::cout << "[hashHashFileNum] " << hashHashFileNum << std::endl;
+
+    return 0;
+  }
+
+  explicit IncLineStaTask(IClangStaTask *iClangStaTask)
+      : ExecutingTask("incLineSta", "Inc line sta", iClangStaTask) {
+    argNames.emplace_back("projectPath");
+  }
+
+public:
+  __attribute__((constructor)) static IncLineStaTask *getInstance() {
+    static IncLineStaTask instance(IClangStaTask::getInstance());
+    return &instance;
+  }
+};
+
 class LineMacroStaTask : public ExecutingTask {
 private:
   int runImpl(const std::vector<std::string> &argValues) const override {
