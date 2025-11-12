@@ -3212,12 +3212,16 @@ void Preprocessor::HandleDefineDirective(
   if (global.isIClangMode(iclang::IClangMode::IncLineCheckMode)) {
     auto metaData = global.getMetaData<iclang::IncLineCheckMetaData>();
     const std::string iiName = II->getName().str();
-    if (!metaData->hashHashFlag && iiName != "__INTMAX_C" &&
-        iiName != "__UINTMAX_C" && iiName != "__INT64_C" &&
-        iiName != "__UINT32_C" && iiName != "__UINT64_C") {
-      for (size_t i = 0; i < MI->getNumTokens(); i++) {
-        if (MI->getReplacementToken(i).getKind() == tok::hashhash) {
-          metaData->hashHashFlag = true;
+    for (size_t i = 0; i < MI->getNumTokens(); i++) {
+      if (MI->getReplacementToken(i).getKind() == tok::hashhash) {
+        metaData->inValidMacro.insert(II->getName().str());
+        break;
+      }
+      if (MI->getReplacementToken(i).getKind() == tok::identifier) {
+        auto nameI = MI->getReplacementToken(i).getIdentifierInfo()->getName().str();
+        if (metaData->inValidMacro.find(nameI) != metaData->inValidMacro.end()) {
+          metaData->inValidMacro.insert(II->getName().str());
+          break;
         }
       }
     }

@@ -266,6 +266,8 @@ void BackendConsumer::HandleTranslationUnit(ASTContext &C) {
       iclang::ShareCheckCC1Driver::run();
     } else if (global.isIClangMode(iclang::IClangMode::LineMacroCheckMode)) {
       iclang::LineMacroCheckCC1Driver::run();
+    } else if (global.isIClangMode(iclang::IClangMode::IncLineCheckMode)) {
+      iclang::IncLineCheckCC1Driver::run();
     } else if (global.isIClangMode(iclang::IClangMode::DumpMode)) {
       iclang::DumpCC1Driver::run();
     } else if (global.isIClangMode(iclang::IClangMode::ProfileMode)) {

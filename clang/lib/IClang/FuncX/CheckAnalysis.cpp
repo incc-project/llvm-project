@@ -10,6 +10,21 @@
 namespace iclang {
 namespace funcx {
 
+bool IncLineCheckAnalysis::TraverseDecl(clang::Decl *decl) {
+  if (!decl) {
+    return true;
+  }
+  auto *funcDecl = llvm::dyn_cast<clang::FunctionDecl>(decl);
+  if (funcDecl == nullptr || !astGlobal.isValidFuncHeader(funcDecl) ||
+      !astGlobal.isValidFuncBody(funcDecl)) {
+    return RecursiveASTVisitor::TraverseDecl(decl);
+  }
+  funcDefNum += 1;
+  // llvm::errs() << astGlobal.dumpDecl(funcDecl) << "\n";
+  const int res = RecursiveASTVisitor::TraverseDecl(decl);
+  return res;
+}
+
 bool LineMacroCheckAnalysis::TraverseDecl(clang::Decl *decl) {
   if (!decl) {
     return true;
@@ -96,6 +111,12 @@ bool DumpAnalysis::TraverseDecl(clang::Decl *decl) {
     llvm::errs() << " (desTempDecl: " << astGlobal.dumpDecl(desTempDecl) << ")";
     const auto *priTempDecl = funcDecl->getPrimaryTemplate();
     llvm::errs() << " (priTempDecl: " << astGlobal.dumpDecl(priTempDecl) << ")";
+    llvm::errs() << " (isTemplated: " << funcDecl->isTemplated() << ")";
+    llvm::errs() << " (isTemplateInstantiation: "
+                 << funcDecl->isTemplateInstantiation() << ")";
+    llvm::errs() << " (isFunctionTemplateSpecialization: "
+                 << funcDecl->isFunctionTemplateSpecialization() << ")";
+    llvm::errs() << " (Auto: " << ASTGlobal::hasAutoReturn(funcDecl) << ")";
   }
 
   llvm::errs() << "\n";

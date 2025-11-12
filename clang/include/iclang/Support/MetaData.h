@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "illvm/Support/Interval.h"
-
 #include "llvm/Support/JSON.h"
 
 namespace iclang {
@@ -187,8 +186,13 @@ public:
   const char *iClangLineWrapper = "__ICLW__";
   bool hashHashFlag = false;
 
+  int baseFuncDefNum = 0;
+
+  std::unordered_set<std::string> inValidMacro;
+
   // MetaData
   // hashHashFlag
+  // baseFuncDefNum
   llvm::json::Object serialize() const override;
 
   void deserialize(llvm::json::Object &root) override;

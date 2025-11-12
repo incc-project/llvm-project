@@ -23,6 +23,25 @@
 namespace iclang {
 namespace funcx {
 
+class IncLineCheckAnalysis
+    : public clang::RecursiveASTVisitor<IncLineCheckAnalysis> {
+private:
+  int funcDefNum = 0;
+  ASTGlobal &astGlobal;
+
+public:
+  explicit IncLineCheckAnalysis(ASTGlobal &_astGlobal)
+      : astGlobal(_astGlobal) {}
+
+  bool shouldVisitTemplateInstantiations() const { return true; }
+
+  bool shouldVisitImplicitCode() const { return true; }
+
+  bool TraverseDecl(clang::Decl *decl);
+
+  int getFuncDefNum() const { return funcDefNum; }
+};
+
 class LineMacroCheckAnalysis
     : public clang::RecursiveASTVisitor<LineMacroCheckAnalysis> {
 private:

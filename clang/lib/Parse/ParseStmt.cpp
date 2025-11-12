@@ -30,6 +30,11 @@
 #include "llvm/ADT/STLExtras.h"
 #include <optional>
 
+// IClang begin.
+#include "iclang/ASTSupport/ASTGlobal.h"
+// IClang end.
+
+
 using namespace clang;
 
 //===----------------------------------------------------------------------===//
@@ -2368,6 +2373,16 @@ StmtResult Parser::ParsePragmaLoopHint(StmtVector &Stmts,
 
 Decl *Parser::ParseFunctionStatementBody(Decl *Decl, ParseScope &BodyScope) {
   assert(Tok.is(tok::l_brace));
+
+  // IClang begin.
+  auto funcDecl = llvm::dyn_cast<FunctionDecl>(Decl);
+  auto &astGlobal = iclang::ASTGlobal::getInstance();
+  bool isValid = funcDecl != nullptr && astGlobal.isValidFuncHeader(funcDecl);
+  if (isValid) {
+    llvm::errs() << "Enter Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+  }
+  // IClang end.
+
   SourceLocation LBraceLoc = Tok.getLocation();
 
   PrettyDeclStackTraceEntry CrashInfo(Actions.Context, Decl, LBraceLoc,
@@ -2391,6 +2406,13 @@ Decl *Parser::ParseFunctionStatementBody(Decl *Decl, ParseScope &BodyScope) {
   }
 
   BodyScope.Exit();
+
+  // IClang begin.
+  if (isValid) {
+    llvm::errs() << "Exit Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+  }
+  // IClang end.
+
   return Actions.ActOnFinishFunctionBody(Decl, FnBody.get());
 }
 

@@ -15,6 +15,11 @@
 
 namespace iclang {
 
+class IncLineCheckCC1Driver {
+public:
+  static void run();
+};
+
 class LineMacroCheckCC1Driver {
 public:
   static void run();

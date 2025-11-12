@@ -5,6 +5,23 @@
 
 namespace iclang {
 
+void IncLineCheckCC1Driver::run() {
+  auto &global = Global::getInstance();
+
+  assert(global.getIClangMode() == IClangMode::IncLineCheckMode);
+
+  auto &astGlobal = ASTGlobal::getInstance();
+  auto &context = astGlobal.getContext();
+
+  auto metaData = global.getMetaData<IncLineCheckMetaData>();
+  const auto astMetaData = astGlobal.getASTMetaData<IncLineCheckASTMetaData>();
+
+  funcx::IncLineCheckAnalysis incLineCheckAnalysis(astGlobal);
+  incLineCheckAnalysis.TraverseDecl(context.getTranslationUnitDecl());
+
+  metaData->baseFuncDefNum = incLineCheckAnalysis.getFuncDefNum();
+}
+
 void LineMacroCheckCC1Driver::run() {
   auto &global = Global::getInstance();
 
