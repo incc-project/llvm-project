@@ -19,10 +19,6 @@
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/ScopeExit.h"
 
-// IClang begin.
-#include "iclang/ASTSupport/ASTGlobal.h"
-// IClang end.
-
 using namespace clang;
 
 StringLiteral *Parser::ParseCXXDeletedFunctionMessage() {
@@ -175,22 +171,6 @@ NamedDecl *Parser::ParseCXXInlineMethodDef(
 
   // Consume the tokens and store them for later parsing.
 
-  // IClang begin.
-  auto &astGlobal = iclang::ASTGlobal::getInstance();
-  const auto *funcDecl = llvm::dyn_cast<FunctionDecl>(FnD);
-  bool isValid = funcDecl != nullptr && astGlobal.isValidFuncHeader(funcDecl) &&
-                 Tok.getKind() == tok::l_brace;
-  if (isValid) {
-    llvm::errs() << "Member Start: " << astGlobal.dumpDecl(funcDecl) << "\n";
-  }
-  auto iClangEnd = [FnD, funcDecl, isValid, &astGlobal]() {
-    if (isValid) {
-      llvm::errs() << "Member end: " << astGlobal.dumpDecl(funcDecl) << "\n";
-    }
-    return FnD;
-  };
-
-
   LexedMethod* LM = new LexedMethod(this, FnD);
   getCurrentClass().LateParsedDeclarations.push_back(LM);
   CachedTokens &Toks = LM->Toks;
@@ -211,7 +191,7 @@ NamedDecl *Parser::ParseCXXInlineMethodDef(
       // If we gave up at the completion point, the initializer list was
       // likely truncated, so don't eat more tokens. We'll hit some extra
       // errors, but they should be ignored in code completion.
-      return iClangEnd();
+      return FnD;
     }
 
     // We already printed an error, and it's likely impossible to recover,
@@ -221,14 +201,11 @@ NamedDecl *Parser::ParseCXXInlineMethodDef(
     SkipMalformedDecl();
     delete getCurrentClass().LateParsedDeclarations.back();
     getCurrentClass().LateParsedDeclarations.pop_back();
-    return iClangEnd();
+    return FnD;
   } else {
     // Consume everything up to (and including) the matching right brace.
     ConsumeAndStoreUntil(tok::r_brace, Toks, /*StopAtSemi=*/false);
   }
-
-  iClangEnd();
-  // IClang end.
 
   // If we're in a function-try-block, we need to store all the catch blocks.
   if (kind == tok::kw_try) {

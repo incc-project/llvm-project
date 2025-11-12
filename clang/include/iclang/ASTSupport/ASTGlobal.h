@@ -142,6 +142,9 @@ public:
       if (cxxMethodDecl->isVirtual()) {
         return false;
       }
+      if (!cxxMethodDecl->isOutOfLine()) {
+        return false;
+      }
     }
     if (getMangledName(funcDecl).empty()) {
       return false;
