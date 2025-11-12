@@ -2018,21 +2018,17 @@ bool Lexer::LexIdentifierContinue(Token &Result, const char *CurPtr) {
     return src + 1;
   };
 
+
   auto &global = iclang::Global::getInstance();
   if (global.isIClangMode(iclang::IClangMode::IncLineCheckMode)) {
     const auto &metaData = global.getMetaData<iclang::IncLineCheckMetaData>();
-    if (!metaData->hashHashFlag) {
-      if (iClangStrNCmp(IdStart, BufferEnd, "__LINE__")) {
-        Result.setLength(strlen(metaData->iClangLineWrapper));
-        Result.setRawIdentifierData(metaData->iClangLineWrapper);
-      } else if (iClangStrNCmp(IdStart, BufferEnd, "__builtin_LINE")) {
-        const auto endPos = isValidBuiltinLine(CurPtr, BufferEnd);
-        if (endPos != nullptr) {
-          Result.setLength(strlen(metaData->iClangLineWrapper));
-          Result.setRawIdentifierData(metaData->iClangLineWrapper);
-          CurPtr = endPos;
-          BufferPtr = CurPtr;
-        }
+    if (iClangStrNCmp(IdStart, BufferEnd, "__builtin_LINE")) {
+      const auto endPos = isValidBuiltinLine(CurPtr, BufferEnd);
+      if (endPos != nullptr) {
+        Result.setLength(strlen(metaData->lineMacro));
+        Result.setRawIdentifierData(metaData->lineMacro);
+        CurPtr = endPos;
+        BufferPtr = CurPtr;
       }
     }
   }

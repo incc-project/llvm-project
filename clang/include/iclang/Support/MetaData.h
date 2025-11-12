@@ -183,6 +183,7 @@ public:
 
 class IncLineCheckMetaData : public MetaData {
 public:
+  const char *lineMacro = "__LINE__";
   const char *iClangLineWrapper = "__ICLW__";
   bool hashHashFlag = false;
 

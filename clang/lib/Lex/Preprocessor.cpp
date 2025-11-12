@@ -68,6 +68,10 @@
 #include <utility>
 #include <vector>
 
+// IClang begin.
+#include "iclang/Support/Global.h"
+// IClang end.
+
 using namespace clang;
 
 /// Minimum distance between two check points, in tokens.
@@ -792,6 +796,19 @@ void Preprocessor::updateOutOfDateIdentifier(const IdentifierInfo &II) const {
 bool Preprocessor::HandleIdentifier(Token &Identifier) {
   assert(Identifier.getIdentifierInfo() &&
          "Can't handle identifiers without identifier info!");
+
+  // IClang begin.
+  auto &global = iclang::Global::getInstance();
+  if (global.isIClangMode(iclang::IClangMode::IncLineCheckMode)) {
+    const auto &metaData = global.getMetaData<iclang::IncLineCheckMetaData>();
+    IdentifierInfo &ii = *Identifier.getIdentifierInfo();
+    if (ii.getName().str() == "__LINE__") {
+      Identifier.setKind(tok::raw_identifier);
+      Identifier.setRawIdentifierData(metaData->iClangLineWrapper);
+      LookUpIdentifierInfo(Identifier);
+    }
+  }
+  // IClang end.
 
   IdentifierInfo &II = *Identifier.getIdentifierInfo();
 
