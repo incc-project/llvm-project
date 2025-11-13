@@ -190,6 +190,7 @@ public:
   int baseFuncDefNum = 0;
 
   std::unordered_set<std::string> inValidMacro;
+  std::vector<bool> isValidFunctionStack;
 
   // MetaData
   // hashHashFlag

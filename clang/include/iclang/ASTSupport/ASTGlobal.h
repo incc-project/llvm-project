@@ -119,12 +119,11 @@ public:
   }
 
   bool isValidFuncHeader(const clang::FunctionDecl *funcDecl) const {
-    if (funcDecl->isImplicit() ||
+    if (funcDecl->isImplicit() || !isMainFileDecl(funcDecl) ||
         funcDecl->getLinkageAndVisibility().getLinkage() ==
             clang::Linkage::UniqueExternal ||
         funcDecl->isTemplated() || funcDecl->isTemplateInstantiation() ||
         funcDecl->isFunctionTemplateSpecialization() ||
-        !isMainFileDecl(funcDecl) ||
         llvm::dyn_cast<clang::CXXConstructorDecl>(funcDecl) != nullptr ||
         llvm::dyn_cast<clang::CXXDestructorDecl>(funcDecl) != nullptr ||
         funcDecl->getOverloadedOperator() !=

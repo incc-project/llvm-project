@@ -2376,10 +2376,14 @@ Decl *Parser::ParseFunctionStatementBody(Decl *Decl, ParseScope &BodyScope) {
 
   // IClang begin.
   auto funcDecl = llvm::dyn_cast<FunctionDecl>(Decl);
+  auto &global = iclang::Global::getInstance();
   auto &astGlobal = iclang::ASTGlobal::getInstance();
-  bool isValid = funcDecl != nullptr && astGlobal.isValidFuncHeader(funcDecl);
+  bool isValid = global.isIClangMode(iclang::IClangMode::IncLineCheckMode) &&
+                 funcDecl != nullptr && astGlobal.isValidFuncHeader(funcDecl);
   if (isValid) {
-    llvm::errs() << "Enter Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+    // llvm::errs() << "Enter Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+    auto metadata = global.getMetaData<iclang::IncLineCheckMetaData>();
+    metadata->isValidFunctionStack.push_back(true);
   }
   // IClang end.
 
@@ -2409,7 +2413,9 @@ Decl *Parser::ParseFunctionStatementBody(Decl *Decl, ParseScope &BodyScope) {
 
   // IClang begin.
   if (isValid) {
-    llvm::errs() << "Exit Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+    // llvm::errs() << "Exit Func " << astGlobal.dumpDecl(funcDecl) << "\n";
+    auto metadata = global.getMetaData<iclang::IncLineCheckMetaData>();
+    metadata->isValidFunctionStack.pop_back();
   }
   // IClang end.
 
